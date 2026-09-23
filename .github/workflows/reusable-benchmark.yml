@@ -25,6 +25,8 @@ jobs:
           COMMIT_SHA: ${{ inputs.commit-sha }}
           IMAGE_DIGEST: ${{ inputs.image-digest }}
         run: test -n "$RELEASE_TAG" && test -n "$COMMIT_SHA" && test -n "$IMAGE_DIGEST"
+      - name: Install test runner
+        run: python -m pip install --disable-pip-version-check pytest
       - name: Run fixture-safe verification
         run: bash scripts/verify_toolkit.sh
       - name: Publish evidence
