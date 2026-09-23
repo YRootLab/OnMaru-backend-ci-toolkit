@@ -1,6 +1,25 @@
 # handoff.md
 
 Current work:
+- Summary: Fix reusable benchmark checkout so a cross-repository caller explicitly supplies the immutable toolkit commit SHA instead of leaking its caller workflow SHA into toolkit checkout.
+- Issue/PR: #48 / PR pending
+- Branch: fix/48-caller-toolkit-ref
+
+Touched files:
+- `.github/workflows/module-benchmark.yml`, `tests/test_module_benchmark_workflow.py`, and this handoff entry only.
+
+Verification:
+- RED: `python3 -m pytest tests/test_module_benchmark_workflow.py -q` failed with the missing `toolkit_ref` input and missing `TOOLKIT_REF` validation environment contract.
+- GREEN: focused cross-repository workflow fixture suite passed (4 tests).
+- Full: pending `bash scripts/verify_toolkit.sh`.
+
+Next step:
+- Open a Korean #48 corrective PR into `develop`; do not merge it in this task. OnMaruBE #365 must pass the same immutable SHA through the new required input after this PR merges.
+
+Open risk or decision:
+- The reusable workflow rejects anything but a 40-character lowercase hexadecimal Git commit SHA before network checkout. It intentionally does not accept mutable branches or tags.
+
+-
 - Summary: Add evidence-linked recommendations that can produce only a restricted, auditable draft-PR payload or an Issue-only payload.
 - Issue/PR: #36 / PR pending
 - Branch: feature/36-restricted-recommendations

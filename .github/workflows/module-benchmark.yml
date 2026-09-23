@@ -7,6 +7,10 @@ on:
         description: Consumer repository ModuleCatalog v1 path.
         required: true
         type: string
+      toolkit_ref:
+        description: Immutable 40-character lowercase toolkit commit SHA supplied by the caller.
+        required: true
+        type: string
       mode:
         description: "Benchmark execution mode: pr, develop, nightly, or release."
         default: pr
@@ -60,11 +64,13 @@ jobs:
           MODE: ${{ inputs.mode }}
           COMMENT_MODE: ${{ inputs.comment_mode }}
           MAX_PARALLEL: ${{ inputs.max_parallel }}
+          TOOLKIT_REF: ${{ inputs.toolkit_ref }}
         run: |
           case "$MODE" in pr|develop|nightly|release) ;; *) exit 2 ;; esac
           case "$COMMENT_MODE" in none|summary|full) ;; *) exit 2 ;; esac
           test "$MAX_PARALLEL" -ge 1
           test "$MAX_PARALLEL" -le 16
+          [[ "$TOOLKIT_REF" =~ ^[0-9a-f]{40}$ ]]
       - name: Checkout consumer repository
         uses: actions/checkout@v4
         with:
@@ -74,7 +80,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: YRootLab/OnMaru-modular-backend-pipeline-toolkit
-          ref: ${{ github.workflow_sha }}
+          ref: ${{ inputs.toolkit_ref }}
           path: .pipeline-toolkit
           persist-credentials: false
       - name: Install the pinned toolkit CLI
