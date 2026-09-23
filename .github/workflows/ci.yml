@@ -27,8 +27,21 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install test runner
-        run: python -m pip install --disable-pip-version-check pytest
+      - name: Install pinned CI dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements-ci.txt
+
+      - name: Audit CI dependencies
+        continue-on-error: true
+        run: |
+          mkdir -p artifacts
+          python -m pip_audit -r requirements-ci.txt | tee artifacts/pip-audit.txt
+
+      - name: Upload dependency audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit-${{ github.sha }}
+          path: artifacts/pip-audit.txt
 
       - name: Verify repository
         run: ./scripts/verify_toolkit.sh

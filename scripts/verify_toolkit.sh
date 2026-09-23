@@ -12,7 +12,8 @@ python3 -c 'from pathlib import Path; files = sorted(Path("docs/decisions").glob
 
 if [ -f pyproject.toml ]; then
   python3 -m compileall -q src tests
-  PYTHONPATH=src python3 -m pytest -q
+  PYTHONPATH=src python3 -m coverage run -m pytest -q
+  python3 -m coverage report --include='src/pipeline_toolkit/*' --fail-under=90
 fi
 
 python3 scripts/verify_workflow_security.py
