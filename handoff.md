@@ -1,15 +1,15 @@
 # handoff.md
 
 Current work:
-- Summary: Implement W0 versioned evidence schema validation, fixtures, and compatibility migration.
-- Issue/PR: #2 / next PR pending
-- Branch: feature/issue-2-evidence-contract-validation
+- Summary: Harden command execution timeout, signal, retry, and partial-output evidence.
+- Issue/PR: #3 / next PR pending
+- Branch: feature/issue-3-command-runner-hardening
 
 Touched files:
-- Contract schema validator, legacy evidence migration, schema fixtures, GitHub Actions fixture, and tests
+- Command runner result model, process timeout handling, signal classification, retry history, and tests
 
 Next step:
-- Merge the W0 PR after CI and verify Issue #2 closes automatically.
+- Merge the W1 PR after CI and verify Issue #3 closes automatically.
 - Continue remaining consumer integration after merge.
 
 Open risk or decision:

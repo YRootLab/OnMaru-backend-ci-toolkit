@@ -28,6 +28,11 @@ class CommandResult:
     reason: str
     attempts: int
     duration_seconds: float
+    attempt_reasons: tuple[str, ...] = ()
+
+def _text(value: str | bytes | None) -> str:
+    if value is None: return ""
+    return value.decode(errors="replace") if isinstance(value, bytes) else value
 
 class CommandRunner:
     def __init__(self, allowed_executables: set[str] | None = None, secrets: tuple[str, ...] = ()):
@@ -40,6 +45,7 @@ class CommandRunner:
         argv = (command.executable, *command.args)
         started = time.monotonic()
         last: CommandResult | None = None
+        attempt_reasons: list[str] = []
         for attempt in range(1, max(1, retry.attempts) + 1):
             env = os.environ.copy(); env.update(command.env)
             try:
@@ -47,16 +53,23 @@ class CommandRunner:
                                         env=env, start_new_session=True)
                 try:
                     out, err = proc.communicate(timeout=timeout)
-                    reason = "success" if proc.returncode == 0 else "non_zero_exit"
-                    last = CommandResult(argv, redact(out, self.secrets), redact(err, self.secrets), proc.returncode, reason, attempt, time.monotonic()-started)
+                    if proc.returncode == 0: reason = "success"
+                    elif proc.returncode < 0: reason = f"signal:{signal.Signals(-proc.returncode).name}"
+                    else: reason = "non_zero_exit"
+                    attempt_reasons.append(reason)
+                    last = CommandResult(argv, redact(_text(out), self.secrets), redact(_text(err), self.secrets), proc.returncode, reason, attempt, time.monotonic()-started, tuple(attempt_reasons))
                 except subprocess.TimeoutExpired as exc:
                     os.killpg(proc.pid, signal.SIGTERM)
                     try: out, err = proc.communicate(timeout=2)
                     except subprocess.TimeoutExpired:
                         os.killpg(proc.pid, signal.SIGKILL); out, err = proc.communicate()
-                    last = CommandResult(argv, redact(exc.stdout or out or "", self.secrets), redact(exc.stderr or err or "", self.secrets), proc.returncode, "timeout", attempt, time.monotonic()-started)
+                    reason = "timeout"
+                    attempt_reasons.append(reason)
+                    last = CommandResult(argv, redact(_text(exc.stdout or out), self.secrets), redact(_text(exc.stderr or err), self.secrets), proc.returncode, reason, attempt, time.monotonic()-started, tuple(attempt_reasons))
             except OSError as exc:
-                last = CommandResult(argv, "", redact(str(exc), self.secrets), None, "execution_error", attempt, time.monotonic()-started)
+                reason = "execution_error"
+                attempt_reasons.append(reason)
+                last = CommandResult(argv, "", redact(str(exc), self.secrets), None, reason, attempt, time.monotonic()-started, tuple(attempt_reasons))
             if last.reason == "success" or last.exit_code not in retry.retry_exit_codes: break
         assert last is not None
         return last
