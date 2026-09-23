@@ -1,16 +1,16 @@
 # handoff.md
 
 Current work:
-- Summary: Implement W7 secure reusable workflow and OnMaru adoption contract.
-- Issue/PR: #9 / next PR pending
-- Branch: feature/issue-9-secure-workflow
+- Summary: Implement deterministic W6 report outputs and provenance-aware visualization helpers.
+- Issue/PR: #8 / next PR pending
+- Branch: feature/issue-8-deterministic-reports
 
 Touched files:
-- Workflow policy checker, image digest verification, adoption contract documentation, fixtures, and tests
+- Report model, deterministic JSON/Markdown/HTML/Job Summary/PNG renderers, top-N pagination, fixtures, and tests
 
 Next step:
-- Obtain an independent maintainer review for the W7 PR.
-- Continue remaining production consumer integration after review.
+- Obtain an independent maintainer review for the W6 PR.
+- Continue schema validation and remaining consumer integration after review.
 
 Open risk or decision:
 - GitHub branch protection is not configured yet.
