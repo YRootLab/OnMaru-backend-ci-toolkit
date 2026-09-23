@@ -1,0 +1,13 @@
+{
+  "release-type": "simple",
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
+  "changelog-path": "changelog.md",
+  "packages": {
+    ".": {
+      "package-name": "onmaru-modular-backend-pipeline-toolkit",
+      "release-type": "simple",
+      "include-component-in-tag": false
+    }
+  }
+}
