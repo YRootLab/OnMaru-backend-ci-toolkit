@@ -1,16 +1,16 @@
 # handoff.md
 
 Current work:
-- Summary: Implement repeated release comparison policy, statistics, regression classification, and resource deltas.
-- Issue/PR: #6 / next PR pending
-- Branch: feature/issue-6-statistical-comparison
+- Summary: Complete JUnit, pytest, Gradle Profiler, Docker, and system collectors with explicit evidence quality.
+- Issue/PR: #7 / next PR pending
+- Branch: feature/issue-7-collector-completion
 
 Touched files:
-- ComparisonPolicy, release comparison aggregation, sample statistics, resource deltas, and tests
+- Gradle Profiler collector, JUnit/pytest count metadata, system CPU metrics, fixtures, and collector tests
 
 Next step:
-- Merge the W5 PR after CI and verify Issue #6 closes automatically.
-- Continue remaining consumer integration after merge.
+- Merge the W3 PR after CI and verify Issue #7 closes automatically.
+- Close already-merged report/workflow issues and reconcile root Issue #1.
 
 Open risk or decision:
 - GitHub branch protection is not configured yet.
