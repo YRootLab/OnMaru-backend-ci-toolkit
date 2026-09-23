@@ -1,16 +1,16 @@
 # handoff.md
 
 Current work:
-- Summary: Implement deterministic W6 report outputs and provenance-aware visualization helpers.
-- Issue/PR: #8 / next PR pending
-- Branch: feature/issue-8-deterministic-reports
+- Summary: Implement W0 versioned evidence schema validation, fixtures, and compatibility migration.
+- Issue/PR: #2 / next PR pending
+- Branch: feature/issue-2-evidence-contract-validation
 
 Touched files:
-- Report model, deterministic JSON/Markdown/HTML/Job Summary/PNG renderers, top-N pagination, fixtures, and tests
+- Contract schema validator, legacy evidence migration, schema fixtures, GitHub Actions fixture, and tests
 
 Next step:
-- Obtain an independent maintainer review for the W6 PR.
-- Continue schema validation and remaining consumer integration after review.
+- Merge the W0 PR after CI and verify Issue #2 closes automatically.
+- Continue remaining consumer integration after merge.
 
 Open risk or decision:
 - GitHub branch protection is not configured yet.
