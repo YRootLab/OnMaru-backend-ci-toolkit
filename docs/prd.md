@@ -2150,3 +2150,420 @@ fork PR이나 untrusted code가 secret 또는 deployment 권한에 접근했는�
 
 이 report의 숫자를 raw artifact까지 재현할 수 있는가?
 ```
+
+---
+
+# Release 연계 Benchmark 비교
+
+Benchmark 결과는 단순한 CI 실행 결과가 아니라 특정 OnMaru 배포 버전에 귀속된 성능 증거여야 한다. 따라서 이전 tag와 현재 tag의 성능을 비교할 수 있도록 `Release`, `BenchmarkRun`, `Comparison`을 분리해서 모델링한다.
+
+## 핵심 식별 관계
+
+```text
+OnMaru Release Tag
+        ↓
+Release Commit SHA
+        ↓
+Container Image Digest
+        ↓
+Deployment
+        ↓
+Benchmark Run
+        ↓
+Comparison
+```
+
+tag는 사람이 검색하는 release 식별자이며, 실제 동일성을 보장하는 값은 commit SHA와 image digest다. 같은 tag가 다른 환경에 배포되거나 재실행될 수 있으므로 tag 하나만 benchmark 결과의 primary identity로 사용하지 않는다.
+
+## Release Model
+
+```json
+{
+  "id": "release-123",
+  "repository": "YRootLab/OnMaru-backend",
+  "version": "v1.4.0",
+  "tag": "v1.4.0",
+  "commitSha": "abc123...",
+  "image": {
+    "repository": "ghcr.io/yrootlab/onmaru-backend",
+    "digest": "sha256:..."
+  },
+  "createdAt": "ISO-8601"
+}
+```
+
+필수 규칙:
+
+- `version`, `tag`, `commitSha`, image digest를 함께 저장한다.
+- tag가 이동되거나 재생성되어도 기존 benchmark evidence를 덮어쓰지 않는다.
+- release 등록 시 repository, commit SHA, image digest를 검증한다.
+- production과 staging의 동일 version 배포는 별도의 deployment로 관리한다.
+
+## BenchmarkRun Model
+
+`BenchmarkRun`은 하나의 release에 대해 특정 환경·suite·실행 조건으로 수행한 한 번의 측정이다.
+
+```json
+{
+  "id": "run-20260923-001",
+  "releaseId": "release-123",
+  "environment": "staging",
+  "suite": "default-backend",
+  "runnerProfile": "ubuntu-24.04-4cpu-8gb",
+  "cacheState": "warm",
+  "toolkitVersion": "v0.1.0",
+  "configHash": "sha256:...",
+  "workflowRunId": "987654",
+  "status": "success",
+  "startedAt": "ISO-8601",
+  "endedAt": "ISO-8601",
+  "artifactsUri": "..."
+}
+```
+
+한 번의 benchmark result만으로 release 성능을 대표하지 않는다. 같은 조건의 여러 `BenchmarkRun`을 저장하고 비교 단계에서 aggregation한다.
+
+## Comparison Model
+
+`Comparison`은 baseline release와 candidate release에 속한 여러 run을 비교한 immutable 분석 결과다.
+
+```json
+{
+  "id": "comparison-001",
+  "baselineReleaseId": "release-previous",
+  "candidateReleaseId": "release-current",
+  "environment": "staging",
+  "suite": "default-backend",
+  "baselineRunIds": ["run-001", "run-002", "run-003"],
+  "candidateRunIds": ["run-101", "run-102", "run-103"],
+  "statisticalMethod": "median_and_p95",
+  "result": "improved",
+  "metrics": {
+    "pipelineWallClock": {
+      "baselineMedianMs": 831000,
+      "candidateMedianMs": 501000,
+      "deltaMs": -330000,
+      "deltaPercent": -39.71
+    }
+  },
+  "inconclusiveReasons": [],
+  "reportUri": "..."
+}
+```
+
+최종 delta만 저장하지 않고 비교에 사용한 모든 run ID와 artifact URI를 보존한다.
+
+## Tag 간 비교 CLI
+
+최소 다음 명령을 지원한다.
+
+```bash
+pipeline-toolkit release register \
+  --repository YRootLab/OnMaru-backend \
+  --version v1.4.0 \
+  --tag v1.4.0 \
+  --commit-sha abc123 \
+  --image-digest sha256:...
+```
+
+```bash
+pipeline-toolkit benchmark compare \
+  --baseline v1.3.2 \
+  --candidate v1.4.0 \
+  --environment staging \
+  --suite default-backend \
+  --repetitions 5 \
+  --cache-state warm \
+  --output ./benchmark/comparison
+```
+
+```bash
+pipeline-toolkit publish \
+  --input ./benchmark/comparison \
+  --storage github-artifact
+```
+
+`benchmark compare`는 다음 순서로 실행한다.
+
+```text
+resolve baseline/candidate tag
+        ↓
+verify commit SHA and image digest
+        ↓
+validate comparable environment/config
+        ↓
+run identical benchmark suite repeatedly
+        ↓
+collect raw artifacts
+        ↓
+normalize baseline/candidate runs
+        ↓
+aggregate median/p95/resource metrics
+        ↓
+classify result
+        ↓
+generate comparison report
+```
+
+## 비교 가능성 검증
+
+다음 조건이 다르면 성능 비교를 자동으로 확정하지 않고 `inconclusive`로 처리한다.
+
+```text
+environment
+runner image
+architecture
+CPU limit
+memory limit
+benchmark suite
+config hash
+toolkit version
+cache state
+database fixture version
+external dependency mode
+```
+
+예를 들어 다음 비교는 유효하지 않다.
+
+```text
+v1.3.2: staging / 4 CPU / warm cache
+v1.4.0: production / 8 CPU / cold cache
+```
+
+이 경우 성능 수치를 계산하더라도 최종 상태는 다음과 같이 기록한다.
+
+```json
+{
+  "result": "inconclusive",
+  "inconclusiveReasons": [
+    "runner resource mismatch",
+    "cache state mismatch"
+  ]
+}
+```
+
+## Baseline 선택 정책
+
+사용자가 baseline을 지정하지 않은 경우 다음 순서로 선택한다.
+
+```text
+1. 같은 production 환경의 직전 성공 release
+2. 같은 major/minor 계열의 직전 성공 release
+3. target branch의 가장 최근 성공 benchmark
+4. 명시된 repository policy의 기준 release
+5. 선택 가능한 baseline 없음 → inconclusive
+```
+
+baseline 선택 결과는 report에 반드시 표시한다. baseline이 없으면 regression 또는 improvement를 단정하지 않는다.
+
+## 반복 실행과 통계 정책
+
+초기 기본값은 다음과 같다.
+
+```yaml
+comparison:
+  warmupRuns: 1
+  repetitions: 5
+  minimumValidRuns: 3
+  aggregation: median
+  includeP95: true
+  regressionThresholdPercent: 10
+```
+
+- baseline과 candidate는 동일 runner profile과 resource limit에서 실행한다.
+- cold cache와 warm cache 실행은 별도의 비교 그룹으로 나눈다.
+- timeout, cancellation, runner outage는 성능 sample에서 제외하고 제외 사유를 보존한다.
+- 유효 sample 수가 `minimumValidRuns`보다 작으면 `inconclusive`다.
+- median, p95, variance 또는 confidence interval, sample count를 함께 표시한다.
+
+결과 상태는 다음 네 가지를 기본으로 한다.
+
+```text
+improved
+regressed
+unchanged
+inconclusive
+```
+
+CPU와 memory가 증가한 경우 wall-clock 결과와 분리해서 표시한다.
+
+```text
+pipeline wall-clock: -39.7%
+CPU time: +21.4%
+peak RSS: +47.4%
+result: improved_with_resource_increase
+```
+
+## Release별 저장 구조
+
+초기에는 GitHub Artifact와 GitHub Release Asset을 사용할 수 있다. 장기 trend와 검색이 필요해지면 Object Storage와 PostgreSQL metadata index로 확장한다.
+
+```text
+benchmark-storage/
+└── onmaru-backend/
+    ├── releases/
+    │   ├── v1.3.2/
+    │   │   ├── release.json
+    │   │   └── runs/
+    │   │       ├── run-001/
+    │   │       └── run-002/
+    │   └── v1.4.0/
+    │       ├── release.json
+    │       └── runs/
+    │           ├── run-101/
+    │           └── run-102/
+    └── comparisons/
+        └── v1.3.2__v1.4.0/
+            ├── comparison.json
+            ├── report.md
+            ├── report.html
+            └── charts/
+```
+
+각 run의 artifact 구조:
+
+```text
+run-101/
+├── manifest.json
+├── raw/
+├── normalized/
+│   ├── pipeline.json
+│   ├── stages.json
+│   └── tests.json
+├── charts/
+├── report/
+│   ├── report.md
+│   ├── report.html
+│   └── report.json
+└── checksums.txt
+```
+
+`manifest.json`은 release, commit, image digest, environment, run ID, schema version, artifact checksum을 연결하는 entry point다.
+
+## OnMaru-backend Release Workflow 연동
+
+OnMaru-backend의 release pipeline은 다음 순서를 따른다.
+
+```text
+release tag 생성
+    ↓
+release metadata 등록
+    ↓
+Docker image build 및 digest 확정
+    ↓
+staging deploy
+    ↓
+이전 성공 release 조회
+    ↓
+benchmark compare 실행
+    ↓
+comparison report/artifact publish
+    ↓
+regression warning 또는 승인 gate
+    ↓
+production promotion
+    ↓
+production benchmark run 저장
+```
+
+예시 workflow 단계:
+
+```yaml
+- name: Register release metadata
+  run: |
+    pipeline-toolkit release register \
+      --repository "${{ github.repository }}" \
+      --version "${{ github.ref_name }}" \
+      --tag "${{ github.ref_name }}" \
+      --commit-sha "${{ github.sha }}" \
+      --image-digest "${IMAGE_DIGEST}"
+
+- name: Compare with previous release
+  run: |
+    pipeline-toolkit benchmark compare \
+      --baseline "${PREVIOUS_RELEASE}" \
+      --candidate "${{ github.ref_name }}" \
+      --environment staging \
+      --suite default-backend \
+      --repetitions 5 \
+      --publish
+```
+
+Toolkit은 OnMaru-backend의 서비스 DB에 benchmark 상세 데이터를 저장하지 않는다. 서비스 운영 데이터와 성능 evidence의 수명주기·접근 패턴이 다르므로 별도의 Benchmark Evidence Store에 저장한다.
+
+## Database Metadata Schema 방향
+
+Object Storage에는 raw/normalized/report를 저장하고, 검색·비교에 필요한 metadata만 relational store에 저장한다.
+
+```text
+releases
+  id, repository, version, tag, commit_sha, image_digest, created_at
+
+deployments
+  id, release_id, environment, namespace, cluster,
+  deployed_image_digest, deployed_at, status
+
+benchmark_runs
+  id, release_id, deployment_id, environment, suite,
+  workflow_run_id, config_hash, toolkit_version, baseline_run_id,
+  status, started_at, ended_at, artifact_uri
+
+benchmark_metrics
+  id, benchmark_run_id, stage_name, metric_name,
+  metric_value, unit, aggregation, measurement_quality,
+  source_artifact_uri
+
+comparisons
+  id, baseline_release_id, candidate_release_id,
+  environment, suite, statistical_method, result,
+  report_uri, created_at
+```
+
+## Prometheus와 Release Evidence Store의 역할 분리
+
+Prometheus에는 현재 상태와 alert에 필요한 저카디널리티 metric만 export한다.
+
+```text
+ci_pipeline_duration_seconds{service="onmaru-backend",environment="staging"}
+ci_pipeline_regressions_total{service="onmaru-backend",environment="staging"}
+ci_benchmark_runs_total{service="onmaru-backend",environment="staging"}
+```
+
+다음 값은 Benchmark Evidence Store와 report에 둔다.
+
+```text
+releaseVersion
+commitSha
+imageDigest
+workflowRunId
+testName
+moduleName
+fullPath
+raw artifact URI
+```
+
+```text
+Prometheus
+  → 현재 상태·alert·운영 dashboard
+
+Benchmark Evidence Store
+  → release별 상세 비교·historical analysis·재현 artifact
+```
+
+## Release 비교 Acceptance Criteria
+
+```text
+[ ] 이전 tag와 현재 tag를 commit SHA와 image digest까지 resolve한다.
+[ ] baseline/candidate의 동일 suite와 config hash를 검증한다.
+[ ] 동일 environment, runner, resource, cache 조건을 비교한다.
+[ ] baseline/candidate를 최소 3회 이상 유효하게 반복 실행할 수 있다.
+[ ] baseline과 candidate의 모든 BenchmarkRun ID를 Comparison에 저장한다.
+[ ] median, p95, absolute delta, relative delta, resource delta를 제공한다.
+[ ] sample 부족·환경 불일치·artifact 누락을 inconclusive로 표시한다.
+[ ] release tag, commit SHA, image digest, workflow run, raw artifact를 추적한다.
+[ ] release별 raw/normalized/report artifact를 immutable하게 저장한다.
+[ ] GitHub Job Summary와 Release Asset에 비교 요약을 연결한다.
+[ ] OnMaru-backend 서비스 DB와 Benchmark Evidence Store를 분리한다.
+[ ] Prometheus label에 commit SHA, test name, full path를 사용하지 않는다.
+[ ] production promotion 전에 staging tag comparison 결과를 확인할 수 있다.
+```

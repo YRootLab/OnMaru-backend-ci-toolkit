@@ -1,0 +1,220 @@
+{
+  "repo": "YRootLab/OnMaru-modular-backend-pipeline-toolkit",
+  "root": {
+    "title": "Build the release-aware CI/CD benchmark and evidence toolkit",
+    "goal": "Implement a reusable toolkit that measures, compares, visualizes, and reports CI/CD performance for OnMaru-backend and similar Spring Boot, Gradle multi-module, and FastAPI repositories, including previous-tag versus current-tag comparisons.",
+    "background": "The PRD defines a lifecycle from inspect and measure through normalization, DAG analysis, visualization, reporting, and optimization. The current repository contains the PRD and architecture records but not the implementation. Work must be split into independently verifiable parallel tasks.",
+    "scope": "Versioned evidence model, reliable command execution, release/deployment identity, collectors, GitHub Actions DAG analysis, critical path, statistical comparison, regression detection, visualization/reporting, secure reusable workflow, and OnMaru adoption contract.",
+    "out_of_scope": "Copying OnMaru-backend source or tests into this repository, implementing production business APIs, changing the OnMaru service database schema, automatic production rollback, and deploying infrastructure without an explicit environment decision.",
+    "success_criteria": [
+      "A consumer repository can run a benchmark suite and obtain raw, normalized, visual, Markdown, HTML, JSON, and Job Summary outputs.",
+      "The toolkit can compare two release tags using commit SHA, image digest, identical suite/config/environment, repeated samples, and an explicit inconclusive result when evidence is insufficient.",
+      "Pipeline work duration, wall-clock duration, DAG, and critical path are calculated correctly for serial, parallel, matrix, skipped, retried, and failed jobs.",
+      "All benchmark values are traceable from report to normalized record to raw artifact and release identity.",
+      "Security, secret redaction, least-privilege workflow permissions, and fork-PR isolation are verified before reusable workflow adoption."
+    ],
+    "architecture_summary": "Use a modular monolith with adapter boundaries: runners produce immutable raw artifacts, collectors parse tool-specific outputs, normalizers emit a versioned unified evidence model, analyzers compute DAG/statistics/comparisons, and renderers produce reports. Release identity is separate from BenchmarkRun and Comparison. Detailed evidence is stored outside the consumer service database.",
+    "risks": [
+      "Noisy CI runners can create false regressions; repeated runs and inconclusive classification are required.",
+      "GitHub Actions matrix, retry, skipped, and reusable workflow semantics can invalidate a naive DAG.",
+      "Untrusted pull requests and arbitrary commands can expose secrets or deployment permissions.",
+      "Parallel execution can reduce wall-clock time while exhausting CPU or memory capacity."
+    ],
+    "definition_of_done": [
+      "All child issues are complete and their acceptance criteria are verified.",
+      "The work graph has passed validation with no circular dependency or unresolved conflict candidate.",
+      "Consumer fixtures cover normal, partial, failed, timeout, missing, and inconclusive evidence.",
+      "A release-to-release comparison fixture produces a reproducible report and artifact manifest.",
+      "The reusable workflow passes least-privilege and secret-redaction checks."
+    ]
+  },
+  "issues": [
+    {
+      "id": "W0",
+      "title": "Define versioned unified evidence contracts and fixtures",
+      "objective": "Create the stable schemas, enums, provenance contract, and fixture conventions consumed by every runner, collector, analyzer, and renderer.",
+      "context": "The PRD requires raw artifacts to be immutable and all downstream analysis to consume a versioned unified evidence model rather than collector-specific output.",
+      "scope": "Evidence schema, status and measurement-quality enums, execution/environment/provenance fields, schema validation, representative fixtures, and compatibility rules.",
+      "out_of_scope": "Tool-specific collectors, GitHub workflow parsing, statistical comparison implementation, and renderer implementation.",
+      "implementation_notes": "Preserve source tool/version, benchmark ID, repository, commit, workflow/job/attempt, runner profile, cache state, time semantics, raw artifact URI, and parser warnings. Model success, failed, cancelled, timeout, partial, missing, invalid, and inconclusive explicitly.",
+      "related_code": "schemas/, src/pipeline_toolkit/contracts/, src/pipeline_toolkit/normalize/, tests/fixtures/schemas/",
+      "dependencies": [],
+      "expected_touch_points": ["schemas/", "src/pipeline_toolkit/contracts/", "src/pipeline_toolkit/normalize/", "tests/fixtures/schemas/"],
+      "parallel_notes": "Wave 0 foundation. All later implementation issues depend on the contracts; no parallel conflict.",
+      "acceptance_criteria": [
+        "Versioned schemas validate stage, test, pipeline, release, benchmark-run, and comparison records.",
+        "The model carries source, execution, environment, time, quality, and provenance fields.",
+        "Missing, partial, invalid, timeout, and inconclusive records cannot be mistaken for successful observations.",
+        "Schema version mismatch and at least one migration/compatibility case are tested.",
+        "Representative JUnit, pytest, GitHub Actions, Docker, and system fixtures are checked into tests/fixtures."
+      ],
+      "verification_method": "Schema validation tests, fixture round-trip tests, and deterministic JSON normalization checks.",
+      "labels": ["enhancement", "priority:P0", "area:core", "wave:0"],
+      "size": "M"
+    },
+    {
+      "id": "W1",
+      "title": "Implement reliable command execution and raw artifact capture",
+      "objective": "Provide a secure, cancellable, timeout-aware command runner that preserves enough evidence to distinguish execution failure from parsing or performance regression.",
+      "context": "Gradle, pytest, Docker, k6, system tools, and toolkit commands must run consistently across consumer repositories and CI runners.",
+      "scope": "Argument-array execution, allowlist, timeout, process-tree cancellation, signal handling, stdout/stderr artifacts, exit and termination reasons, retry policy, redaction, and partial output preservation.",
+      "out_of_scope": "Tool-specific parsing and deployment credential management.",
+      "implementation_notes": "Never execute an interpolated shell string. Return a stable CommandResult and map timeout, cancellation, non-zero exit, resource exhaustion, and parser errors to distinct reasons.",
+      "related_code": "src/pipeline_toolkit/runners/, src/pipeline_toolkit/security/, tests/fixtures/commands/",
+      "dependencies": ["W0"],
+      "expected_touch_points": ["src/pipeline_toolkit/runners/", "src/pipeline_toolkit/security/", "tests/fixtures/commands/"],
+      "parallel_notes": "Can run in parallel with W2 and W4 after W0; touch points are isolated.",
+      "acceptance_criteria": [
+        "Commands use executable plus argument arrays and reject disallowed executables.",
+        "Timeout terminates the complete process tree and records a timeout reason.",
+        "stdout and stderr are separately preserved as redacted raw artifacts.",
+        "Retries are limited to configured transient failures and are recorded per attempt.",
+        "Failure fixtures cover non-zero exit, timeout, SIGTERM/SIGKILL, partial output, and secret redaction."
+      ],
+      "verification_method": "Unit and integration tests with fake long-running, failing, retryable, and secret-emitting commands.",
+      "labels": ["enhancement", "priority:P0", "area:core", "area:security", "wave:1"],
+      "size": "L"
+    },
+    {
+      "id": "W2",
+      "title": "Implement release, deployment, and benchmark evidence storage contracts",
+      "objective": "Represent release tag, commit SHA, image digest, deployment, BenchmarkRun, Comparison, and artifact manifest so results can be compared and reproduced by release.",
+      "context": "OnMaru-backend needs previous-tag versus current-tag performance comparison without storing benchmark raw data in the service database.",
+      "scope": "Release registration, deployment identity, benchmark-run and comparison metadata, baseline reference, artifact URI/checksum manifest, GitHub Artifact publish contract, and future Object Storage/PostgreSQL mapping.",
+      "out_of_scope": "Provisioning Object Storage/PostgreSQL and changing the OnMaru service schema.",
+      "implementation_notes": "Treat commit SHA and image digest as immutable identity; tag is a human-facing lookup key. Store raw/normalized/report artifacts outside the consumer service database.",
+      "related_code": "src/pipeline_toolkit/provenance/, src/pipeline_toolkit/reports/, src/pipeline_toolkit/github/, schemas/release*.json, schemas/benchmark*.json",
+      "dependencies": ["W0"],
+      "expected_touch_points": ["src/pipeline_toolkit/provenance/", "src/pipeline_toolkit/reports/", "schemas/release*.json", "schemas/benchmark*.json"],
+      "parallel_notes": "Can run in parallel with W1 and W4 after W0; no shared implementation directories.",
+      "acceptance_criteria": [
+        "Release metadata requires repository, version/tag, commit SHA, and image digest.",
+        "BenchmarkRun references release, deployment environment, suite, config hash, runner profile, and artifact manifest.",
+        "Comparison references baseline/candidate releases and all contributing run IDs.",
+        "Artifact manifest includes raw, normalized, report URIs and checksums.",
+        "Tag-only identity, digest mismatch, duplicate artifact, and missing baseline cases are tested."
+      ],
+      "verification_method": "Schema and contract tests plus deterministic manifest generation with release fixtures.",
+      "labels": ["enhancement", "priority:P0", "area:release", "area:observability", "wave:1"],
+      "size": "M"
+    },
+    {
+      "id": "W3",
+      "title": "Implement benchmark collectors for JUnit, pytest, Gradle, Docker, and system metrics",
+      "objective": "Collect source-specific benchmark and test evidence and normalize it through the unified contracts.",
+      "context": "The PRD integrates existing open-source tools rather than reimplementing their benchmark engines.",
+      "scope": "JUnit XML, pytest XML/durations, Gradle Profiler, /usr/bin/time or equivalent system metrics, Docker BuildKit metadata, parser warnings, and collector capability detection.",
+      "out_of_scope": "GitHub Actions DAG collection and release comparison aggregation.",
+      "implementation_notes": "Use W1 for execution and W0 for normalized output. Preserve malformed and missing source files as invalid/missing evidence instead of silently skipping them.",
+      "related_code": "src/pipeline_toolkit/collectors/, src/pipeline_toolkit/inspect/, src/pipeline_toolkit/runners/gradle.py, src/pipeline_toolkit/runners/pytest.py, tests/fixtures/junit/, tests/fixtures/pytest/",
+      "dependencies": ["W1"],
+      "expected_touch_points": ["src/pipeline_toolkit/collectors/", "src/pipeline_toolkit/inspect/", "tests/fixtures/junit/", "tests/fixtures/pytest/"],
+      "parallel_notes": "Runs in Wave 2 in parallel with W4 and W5; collector directories are isolated from graph and comparison modules.",
+      "acceptance_criteria": [
+        "JUnit and pytest results expose test counts, failures, skips, duration, and slowest tests.",
+        "Gradle Profiler and system metrics preserve CPU and peak memory when available.",
+        "Docker collector records build duration, cache signals, image metadata, and parser status.",
+        "Malformed, missing, and partial source files produce explicit quality/status records.",
+        "Collector outputs validate against W0 schemas and retain raw artifact provenance."
+      ],
+      "verification_method": "Unit tests for each parser, fixture-based integration tests, and malformed/missing input tests.",
+      "labels": ["enhancement", "priority:P1", "area:adapter", "area:core", "wave:2"],
+      "size": "L"
+    },
+    {
+      "id": "W4",
+      "title": "Reconstruct GitHub Actions DAG and calculate critical path",
+      "objective": "Model workflow, job, matrix execution, attempt, and step timing to calculate work duration, wall-clock duration, and critical path correctly.",
+      "context": "Naive job graphs lose queue time, skipped jobs, retries, matrix executions, reusable workflows, and failed dependency semantics.",
+      "scope": "GitHub API pagination/rate limits, Workflow→Job→Matrix→Attempt→Step model, conditional/skipped/retried/cancelled/failed jobs, logical versus execution DAG, queue/execute/idle durations, critical path.",
+      "out_of_scope": "Local test collectors and statistical release comparison.",
+      "implementation_notes": "Unknown timestamps and inferred edges must be marked rather than guessed. Preserve both logical and execution graph views.",
+      "related_code": "src/pipeline_toolkit/github/, src/pipeline_toolkit/pipeline/, tests/fixtures/github-actions/, tests/fixtures/dag/",
+      "dependencies": ["W0"],
+      "expected_touch_points": ["src/pipeline_toolkit/github/", "src/pipeline_toolkit/pipeline/", "tests/fixtures/github-actions/", "tests/fixtures/dag/"],
+      "parallel_notes": "Can run in parallel with W1 and W2 after W0; no shared implementation directories.",
+      "acceptance_criteria": [
+        "Matrix, skipped, retry, cancelled, failed dependency, reusable workflow, and missing timestamp cases are represented.",
+        "Queue duration, execution duration, work duration, wall-clock, and critical path are distinct metrics.",
+        "Serial, fully parallel, diamond, idle-gap, retry, and skipped DAG fixtures match expected values.",
+        "GitHub API pagination, 401/403/404/429/5xx, and partial response behavior are explicit.",
+        "Critical-path output identifies node IDs and source workflow/job references."
+      ],
+      "verification_method": "Fixture-driven DAG tests and GitHub API client tests with pagination, rate limit, and partial data responses.",
+      "labels": ["enhancement", "priority:P0", "area:github", "area:core", "wave:1"],
+      "size": "L"
+    },
+    {
+      "id": "W5",
+      "title": "Implement baseline comparison, statistics, and regression classification",
+      "objective": "Compare repeated baseline/candidate benchmark runs and classify improved, regressed, unchanged, or inconclusive results with resource trade-offs.",
+      "context": "Release-to-release comparison must avoid false conclusions caused by noisy runners, mismatched environments, insufficient samples, or failed collection.",
+      "scope": "Baseline selection, comparability checks, warmup/repetition policy, median/p95/variance or confidence interval, absolute/relative delta, CPU/memory delta, threshold configuration, warning-only gate.",
+      "out_of_scope": "Visualization implementation and production deployment promotion.",
+      "implementation_notes": "Use synthetic normalized evidence fixtures first. Never treat failed, timeout, missing, invalid, or insufficient samples as performance samples.",
+      "related_code": "src/pipeline_toolkit/compare/, src/pipeline_toolkit/analysis/statistics.py, src/pipeline_toolkit/analysis/regression.py, tests/fixtures/comparison/",
+      "dependencies": ["W0"],
+      "expected_touch_points": ["src/pipeline_toolkit/compare/", "src/pipeline_toolkit/analysis/statistics.py", "src/pipeline_toolkit/analysis/regression.py", "tests/fixtures/comparison/"],
+      "parallel_notes": "Can run in parallel with W3 and W4 using W0 fixtures; no shared implementation directories.",
+      "acceptance_criteria": [
+        "Baseline and candidate require comparable environment, runner, suite, config, cache, fixture, and dependency mode.",
+        "A configurable warmup, repetition, and minimum-valid-run policy is enforced.",
+        "Median, p95 when sufficient, sample counts, deltas, and resource changes are reported.",
+        "No baseline, mismatched conditions, missing artifacts, or insufficient valid runs produce inconclusive.",
+        "Regression threshold combines relative percentage, minimum absolute delta, and minimum samples.",
+        "The comparison result references every contributing BenchmarkRun and artifact."
+      ],
+      "verification_method": "Deterministic statistical fixtures covering improvement, regression, unchanged, noise, resource increase, and inconclusive cases.",
+      "labels": ["enhancement", "priority:P1", "area:core", "area:observability", "wave:2"],
+      "size": "L"
+    },
+    {
+      "id": "W6",
+      "title": "Build deterministic visualizations and evidence reports",
+      "objective": "Generate reproducible PNG/HTML/Markdown/JSON/Job Summary outputs from normalized and analyzed evidence.",
+      "context": "The PRD requires timeline, before/after, stage breakdown, slowest modules/tests, resource, cache, dependency, affected testing, and historical views.",
+      "scope": "Report model, timeline, comparison, waterfall/bars, resource, cache, DAG/critical path, affected modules, provenance/missing-data indicators, top-N behavior, Markdown, HTML, JSON, GitHub Job Summary.",
+      "out_of_scope": "Collector parsing, workflow DAG reconstruction, and long-term storage provisioning.",
+      "implementation_notes": "All renderers consume the same report model; never parse raw collector output directly. Keep ordering, tie-breaks, timestamps, colors, and rounding deterministic.",
+      "related_code": "src/pipeline_toolkit/visualization/, src/pipeline_toolkit/reports/, resources/report/templates/, tests/fixtures/reports/",
+      "dependencies": ["W2", "W3", "W4", "W5"],
+      "expected_touch_points": ["src/pipeline_toolkit/visualization/", "src/pipeline_toolkit/reports/", "resources/report/templates/", "tests/fixtures/reports/"],
+      "parallel_notes": "Serial after collector, DAG, and comparison contracts are available; no parallel conflict with earlier issues.",
+      "acceptance_criteria": [
+        "A report includes wall-clock, work duration, critical path, baseline/candidate, sample count, and regression status.",
+        "Charts identify missing, partial, estimated, and inconclusive data instead of hiding it.",
+        "PNG, HTML, Markdown, JSON, and Job Summary derive from one report model.",
+        "All report values link to normalized records and raw artifact URIs.",
+        "Large module/test sets have deterministic top-N, pagination, and tie handling.",
+        "Repeated rendering of identical inputs produces identical structured output."
+      ],
+      "verification_method": "Golden report fixtures, deterministic rendering tests, HTML escaping checks, and Job Summary snapshot tests.",
+      "labels": ["enhancement", "priority:P1", "area:reporting", "area:observability", "wave:3"],
+      "size": "L"
+    },
+    {
+      "id": "W7",
+      "title": "Add secure reusable workflow and OnMaru adoption contract",
+      "objective": "Provide a least-privilege GitHub Actions integration and document how OnMaru-backend registers releases, deploys staging, compares tags, publishes evidence, and promotes safely.",
+      "context": "The toolkit is only useful when a consumer repository can adopt it without copying source code or exposing production credentials.",
+      "scope": "Reusable workflow/action, release register input, benchmark compare/publish integration, staging smoke gate, artifact retention, fork-PR isolation, secret redaction, production protected environment, OnMaru consumer prompt/config contract.",
+      "out_of_scope": "Changing OnMaru production infrastructure, automatic rollback, and provisioning external storage.",
+      "implementation_notes": "Use read-only permissions for PR CI, write permissions only for controlled release jobs, concurrency controls, and explicit environment approval. Reuse docs/to-be/onmaru-backend-release-benchmark-implementation-prompt.md.",
+      "related_code": ".github/workflows/, .github/actions/, docs/to-be/, scripts/, examples/onmaru/",
+      "dependencies": ["W2", "W6"],
+      "expected_touch_points": [".github/workflows/", ".github/actions/", "docs/to-be/", "scripts/", "examples/onmaru/"],
+      "parallel_notes": "Final integration issue; depends on storage and report contracts, then validates the consumer adoption path.",
+      "acceptance_criteria": [
+        "A consumer workflow can pass release tag, commit SHA, image digest, environment, suite, and config to the toolkit.",
+        "PR workflows use contents:read and do not expose release/deployment secrets to fork PRs.",
+        "Release workflow publishes release metadata, benchmark artifacts, comparison report, and Job Summary.",
+        "Staging smoke validation checks the deployed image digest before comparison.",
+        "Production promotion is protected by explicit approval or a documented warning-only policy.",
+        "OnMaru adoption documentation includes commands, storage mapping, failure modes, and verification results."
+      ],
+      "verification_method": "Workflow YAML validation, shell verification, mocked consumer fixture, permission review, secret-redaction test, and end-to-end fixture run.",
+      "labels": ["enhancement", "priority:P0", "area:github", "area:release", "area:security", "wave:4"],
+      "size": "L"
+    }
+  ]
+}
