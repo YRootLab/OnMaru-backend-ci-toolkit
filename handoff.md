@@ -1,6 +1,24 @@
 # handoff.md
 
 Current work:
+- Summary: Add evidence-linked recommendations that can produce only a restricted, auditable draft-PR payload or an Issue-only payload.
+- Issue/PR: #36 / PR pending
+- Branch: feature/36-restricted-recommendations
+
+Touched files:
+- `src/pipeline_toolkit/recommendations/`, `tests/test_recommendations.py`, and this handoff entry only.
+
+Verification:
+- RED: `PYTHONPATH=src python3 -m pytest -q tests/test_recommendations.py` failed with `ModuleNotFoundError` because the recommendations contract did not exist.
+- GREEN: focused recommendation contract suite passed (13 tests).
+- Full: `bash scripts/verify_toolkit.sh` passed (86 tests, 92% coverage, workflow security verification).
+
+Next step:
+- Open a Korean #36 PR into `develop`; do not merge it in this task.
+
+Open risk or decision:
+- This package creates declarative payloads only. It never creates, approves, or merges an Issue or PR; all draft remediation requires human review.
+
 - Summary: Correct module benchmark comparability so every performance-eligible sample carries a typed environment/configuration identity.
 - Issue/PR: #44 / PR pending
 - Branch: fix/44-evidence-environment-identity
