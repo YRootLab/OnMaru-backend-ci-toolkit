@@ -1,16 +1,16 @@
 # handoff.md
 
 Current work:
-- Summary: Add low-cardinality telemetry, correlation IDs, deterministic event serialization, and redaction.
-- Issue/PR: #26 / next PR pending
-- Branch: feature/issue-26-telemetry-contract
+- Summary: Add installable CLI commands and non-root runtime image for consumer adoption.
+- Issue/PR: #25 / next PR pending
+- Branch: feature/issue-25-cli-runtime
 
 Touched files:
-- Telemetry event model, metric label policy, run/comparison/trace correlation, redaction tests, and serialization fixtures
+- CLI entrypoint, validate/compare/report commands, console script, Docker runtime, and CLI tests
 
 Next step:
-- Merge the P0 observability telemetry PR after CI.
-- Continue CLI/package and operational dashboard improvements.
+- Merge the P1 CLI/runtime PR after CI.
+- Continue operational baseline documentation and dashboard/alert integration.
 
 Open risk or decision:
 - GitHub branch protection is not configured yet.
