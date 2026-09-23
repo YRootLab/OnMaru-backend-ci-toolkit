@@ -19,7 +19,8 @@ jobs:
     if: ${{ github.event_name == 'workflow_call' }}
     steps:
       - uses: actions/checkout@v4
-        with: {ref: ${{ inputs.commit-sha }} }
+        with:
+          ref: ${{ inputs.commit-sha }}
       - name: Validate immutable release identity
         env:
           RELEASE_TAG: ${{ inputs.release-tag }}
