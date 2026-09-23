@@ -7,6 +7,7 @@ name = "onmaru-pipeline-toolkit"
 version = "0.1.0"
 description = "Release-aware CI/CD benchmark and evidence toolkit"
 requires-python = ">=3.9"
+dependencies = ["PyYAML>=6,<7"]
 
 [project.scripts]
 pipeline-toolkit = "pipeline_toolkit.cli:main"
