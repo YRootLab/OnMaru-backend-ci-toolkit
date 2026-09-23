@@ -17,6 +17,19 @@ if reusable.is_file():
         violations.append(f"{reusable}: reusable workflow must declare contents: read")
     if "secrets." in content:
         violations.append(f"{reusable}: reusable workflow must not reference secrets")
+module_benchmark = Path(".github/workflows/module-benchmark.yml")
+if module_benchmark.is_file():
+    content = module_benchmark.read_text()
+    if "workflow_call:" not in content:
+        violations.append(f"{module_benchmark}: module benchmark must declare workflow_call")
+    if "contents: read" not in content:
+        violations.append(f"{module_benchmark}: module benchmark must declare contents: read")
+    if "secrets." in content:
+        violations.append(f"{module_benchmark}: module benchmark must not reference secrets")
+    if "pull_request_target" in content:
+        violations.append(f"{module_benchmark}: module benchmark must not use pull_request_target")
+    if "persist-credentials: false" not in content:
+        violations.append(f"{module_benchmark}: checkouts must not persist credentials")
 if violations:
     print("\n".join(violations), file=sys.stderr)
     raise SystemExit(1)

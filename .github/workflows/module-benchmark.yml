@@ -1,0 +1,246 @@
+name: module-benchmark
+
+on:
+  workflow_call:
+    inputs:
+      catalog_path:
+        description: Consumer repository ModuleCatalog v1 path.
+        required: true
+        type: string
+      mode:
+        description: "Benchmark execution mode: pr, develop, nightly, or release."
+        default: pr
+        required: false
+        type: string
+      max_parallel:
+        description: Bounded light/medium module matrix concurrency.
+        default: 4
+        required: false
+        type: number
+      baseline_ref:
+        description: Candidate baseline branch or immutable release tag.
+        default: develop
+        required: false
+        type: string
+      comment_mode:
+        description: "Consumer-owned comment policy: none, summary, or full."
+        default: summary
+        required: false
+        type: string
+    outputs:
+      result:
+        description: "improved, unchanged, regressed, inconclusive, or failed."
+        value: ${{ jobs.verify.outputs.result }}
+      comparison_id:
+        description: Traceable candidate/baseline comparison identifier.
+        value: ${{ jobs.verify.outputs.comparison_id }}
+      manifest_uri:
+        description: GitHub Actions URI containing the module evidence manifest.
+        value: ${{ jobs.verify.outputs.manifest_uri }}
+      report_artifact:
+        description: GitHub Artifact name containing the aggregate report.
+        value: ${{ jobs.verify.outputs.report_artifact }}
+      critical_path_seconds:
+        description: Longest observed module execution duration in this run.
+        value: ${{ jobs.verify.outputs.critical_path_seconds }}
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    name: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: Validate caller-controlled inputs
+        env:
+          MODE: ${{ inputs.mode }}
+          COMMENT_MODE: ${{ inputs.comment_mode }}
+          MAX_PARALLEL: ${{ inputs.max_parallel }}
+        run: |
+          case "$MODE" in pr|develop|nightly|release) ;; *) exit 2 ;; esac
+          case "$COMMENT_MODE" in none|summary|full) ;; *) exit 2 ;; esac
+          test "$MAX_PARALLEL" -ge 1
+          test "$MAX_PARALLEL" -le 16
+      - name: Checkout consumer repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Checkout immutable toolkit implementation
+        uses: actions/checkout@v4
+        with:
+          repository: YRootLab/OnMaru-modular-backend-pipeline-toolkit
+          ref: ${{ github.workflow_sha }}
+          path: .pipeline-toolkit
+          persist-credentials: false
+      - name: Install the pinned toolkit CLI
+        run: |
+          python -m pip install --disable-pip-version-check --no-deps ./.pipeline-toolkit
+      - name: Build affected module matrix
+        id: plan
+        env:
+          CATALOG_PATH: ${{ inputs.catalog_path }}
+          MODE: ${{ inputs.mode }}
+          BASELINE_REF: ${{ inputs.baseline_ref }}
+        run: |
+          changed_paths=()
+          if [ "$MODE" = "pr" ] && [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            while IFS= read -r path; do changed_paths+=(--changed-path "$path"); done < <(git diff --name-only "${{ github.event.pull_request.base.sha }}" "$GITHUB_SHA" || true)
+          fi
+          pipeline-toolkit module-plan --catalog "$CATALOG_PATH" "${changed_paths[@]}" > module-plan.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          plan = json.load(open("module-plan.json"))
+          print("matrix=" + json.dumps({"include": [{
+              "id": module["id"],
+              "test_command": module["test_command"],
+              "resource_profile": module["resource_profile"],
+          } for module in plan["modules"]]}, separators=(",", ":")))
+          PY
+
+  module-test:
+    name: module-test (${{ matrix.id }})
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: module-benchmark-${{ github.repository }}-${{ matrix.resource_profile }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(inputs.max_parallel) }}
+      matrix: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    steps:
+      - name: Checkout consumer repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run consumer-owned module command without secrets
+        id: test
+        env:
+          MODULE_ID: ${{ matrix.id }}
+          TEST_COMMAND: ${{ matrix.test_command }}
+        run: |
+          mkdir -p ".module-benchmark/$MODULE_ID"
+          set +e
+          /usr/bin/time -v -o ".module-benchmark/$MODULE_ID/time.txt" bash -lc "$TEST_COMMAND" > ".module-benchmark/$MODULE_ID/stdout.txt" 2> ".module-benchmark/$MODULE_ID/stderr.txt"
+          status=$?
+          export MODULE_EXIT_STATUS="$status"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          module_id = os.environ["MODULE_ID"]
+          root = Path(".module-benchmark") / module_id
+          elapsed = None
+          for line in (root / "time.txt").read_text(errors="replace").splitlines():
+              if "Elapsed (wall clock) time" in line:
+                  value = line.split("): ", 1)[-1].strip()
+                  parts = [float(part) for part in value.split(":")]
+                  elapsed = parts[-1] + (parts[-2] * 60 if len(parts) > 1 else 0) + (parts[-3] * 3600 if len(parts) > 2 else 0)
+          (root / "execution.json").write_text(json.dumps({
+              "module_id": module_id,
+              "command": os.environ["TEST_COMMAND"],
+              "exit_code": int(os.environ["MODULE_EXIT_STATUS"]),
+              "wall_clock_seconds": elapsed,
+          }, sort_keys=True))
+          PY
+          exit "$status"
+      - name: Publish raw module evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: module-evidence-${{ matrix.id }}
+          path: .module-benchmark/${{ matrix.id }}
+          if-no-files-found: error
+          retention-days: 14
+
+  aggregate:
+    name: aggregate
+    needs: [detect, module-test]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      result: ${{ steps.summary.outputs.result }}
+      comparison_id: ${{ steps.summary.outputs.comparison_id }}
+      manifest_uri: ${{ steps.summary.outputs.manifest_uri }}
+      report_artifact: ${{ steps.summary.outputs.report_artifact }}
+      critical_path_seconds: ${{ steps.summary.outputs.critical_path_seconds }}
+    steps:
+      - name: Download module evidence
+        if: ${{ always() }}
+        uses: actions/download-artifact@v4
+        with:
+          pattern: module-evidence-*
+          path: module-evidence
+          merge-multiple: false
+      - name: Build aggregate manifest and report
+        id: summary
+        env:
+          MATRIX_RESULT: ${{ needs.module-test.result }}
+          DETECT_RESULT: ${{ needs.detect.result }}
+          MODE: ${{ inputs.mode }}
+          BASELINE_REF: ${{ inputs.baseline_ref }}
+        run: |
+          mkdir -p module-benchmark-report
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          executions = []
+          for path in sorted(Path("module-evidence").glob("**/execution.json")):
+              executions.append(json.loads(path.read_text()))
+          failed = os.environ["MATRIX_RESULT"] not in {"success", "skipped"} or os.environ["DETECT_RESULT"] != "success"
+          result = "failed" if failed else "inconclusive"
+          critical_path = max((record.get("wall_clock_seconds") or 0 for record in executions), default=0)
+          comparison_id = f"{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
+          manifest_uri = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          manifest = {
+              "comparison_id": comparison_id,
+              "mode": os.environ["MODE"],
+              "baseline_ref": os.environ["BASELINE_REF"],
+              "result": result,
+              "executions": executions,
+              "critical_path_seconds": critical_path,
+              "manifest_uri": manifest_uri,
+          }
+          Path("module-benchmark-report/manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
+          Path("module-benchmark-report/report.md").write_text(
+              f"# Module benchmark\\n\\nResult: `{result}`\\n\\nCritical path: `{critical_path}` seconds\\n")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"result={result}\\ncomparison_id={comparison_id}\\n")
+              output.write(f"manifest_uri={manifest_uri}\\nreport_artifact=module-benchmark-report\\n")
+              output.write(f"critical_path_seconds={critical_path}\\n")
+          PY
+      - name: Publish aggregate evidence and report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: module-benchmark-report
+          path: module-benchmark-report
+          if-no-files-found: error
+          retention-days: 14
+
+  verify:
+    name: verify
+    needs: aggregate
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      result: ${{ needs.aggregate.outputs.result }}
+      comparison_id: ${{ needs.aggregate.outputs.comparison_id }}
+      manifest_uri: ${{ needs.aggregate.outputs.manifest_uri }}
+      report_artifact: ${{ needs.aggregate.outputs.report_artifact }}
+      critical_path_seconds: ${{ needs.aggregate.outputs.critical_path_seconds }}
+    steps:
+      - name: Enforce required fan-in result
+        env:
+          RESULT: ${{ needs.aggregate.outputs.result }}
+        run: |
+          case "$RESULT" in improved|unchanged|regressed|inconclusive) exit 0 ;; failed) exit 1 ;; *) exit 2 ;; esac

@@ -81,3 +81,8 @@ Open risk or decision:
 
 Ad hoc requests captured this session:
 - [x] Extend `scripts/verify_toolkit.sh` when the Python toolkit implementation lands.
+# Issue #35 — reusable module benchmark workflow
+
+- Branch: `feature/35-reusable-module-benchmark`
+- Scope owner: `.github/workflows/module-benchmark.yml`, its fixture test, and workflow security validation only.
+- Status: fixture contract, workflow security validation, and toolkit verification passed; ready for PR review.
