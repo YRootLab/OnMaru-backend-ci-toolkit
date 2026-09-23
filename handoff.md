@@ -36,6 +36,10 @@ Next step:
 
 Open risk or decision:
 - Invalid catalogs return exit code 2 with diagnostics only on stderr; unavailable or unmapped diffs safely select the full suite.
+- Summary: Compare validated module benchmark samples and render PR warning/release approval-hold reports.
+- Issue/PR: #40 / pending
+- Branch: feature/40-module-benchmark-reporting
+- Verification: focused comparison tests (6 passed); `./scripts/verify_toolkit.sh` (60 passed, 92% coverage, workflow security passed).
 
 - Summary: Define typed module benchmark evidence manifest for comparison-ready provenance.
 - Issue/PR: #34 / pending
