@@ -9,5 +9,5 @@ def collect_buildkit(path: str | Path) -> list[Evidence]:
     except (json.JSONDecodeError, OSError) as exc: return [Evidence("docker.build", None, "seconds", Quality.INVALID, "buildkit", warnings=(str(exc),))]
     duration = data.get("duration_seconds")
     quality = Quality.SUCCESS if isinstance(duration, (int, float)) else Quality.PARTIAL
-    warnings = tuple(f"{key}={data[key]}" for key in ("cache_hit", "image_digest") if key in data)
+    warnings = tuple(f"{key}={str(data[key]).lower() if isinstance(data[key], bool) else data[key]}" for key in ("cache_hit", "image_digest") if key in data)
     return [Evidence("docker.build", duration, "seconds", quality, "buildkit", warnings=warnings)]
