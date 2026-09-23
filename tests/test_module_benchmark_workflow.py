@@ -16,12 +16,18 @@ def test_reusable_module_benchmark_declares_prd_workflow_call_contract():
     contract = workflow["on"]["workflow_call"]
     assert set(contract["inputs"]) == {
         "catalog_path",
+        "toolkit_ref",
         "mode",
         "max_parallel",
         "baseline_ref",
         "comment_mode",
     }
     assert contract["inputs"]["catalog_path"]["type"] == "string"
+    assert contract["inputs"]["toolkit_ref"] == {
+        "description": "Immutable 40-character lowercase toolkit commit SHA supplied by the caller.",
+        "required": "true",
+        "type": "string",
+    }
     assert contract["inputs"]["mode"]["default"] == "pr"
     assert contract["inputs"]["max_parallel"]["type"] == "number"
     assert set(contract["outputs"]) == {
@@ -66,3 +72,28 @@ def test_workflow_is_read_only_secret_free_and_publishes_evidence_artifacts():
     assert "module-evidence-${{ matrix.id }}" in text
     assert "module-benchmark-report" in text
     assert "module-benchmark-${{ github.repository }}-${{ matrix.resource_profile }}" in text
+
+
+def test_cross_repository_caller_pins_toolkit_checkout_to_its_explicit_immutable_ref():
+    workflow = load_workflow()
+    text = WORKFLOW.read_text()
+
+    caller_contract = {
+        "repository": "YRootLab/OnMaru-backend",
+        "toolkit_ref": "d8d67b3102164e0fa340322bef1d3f1d9b081153",
+    }
+    assert caller_contract["repository"] != "YRootLab/OnMaru-modular-backend-pipeline-toolkit"
+    assert len(caller_contract["toolkit_ref"]) == 40
+    assert caller_contract["toolkit_ref"].islower()
+
+    detect_steps = workflow["jobs"]["detect"]["steps"]
+    validation = detect_steps[0]
+    toolkit_checkout = next(
+        step for step in detect_steps if step["name"] == "Checkout immutable toolkit implementation"
+    )
+
+    assert validation["env"]["TOOLKIT_REF"] == "${{ inputs.toolkit_ref }}"
+    assert '[[ "$TOOLKIT_REF" =~ ^[0-9a-f]{40}$ ]]' in validation["run"]
+    assert toolkit_checkout["with"]["repository"] == "YRootLab/OnMaru-modular-backend-pipeline-toolkit"
+    assert toolkit_checkout["with"]["ref"] == "${{ inputs.toolkit_ref }}"
+    assert "github.workflow_sha" not in text
