@@ -13,6 +13,8 @@ YRootLab/onmaru-modular-backend-pipeline-toolkit
 
 Spring Boot + Gradle Multi-Module + FastAPI와 같이 여러 runtime과 module이 결합된 backend repository에서 CI/CD pipeline을 **측정하고, 분석하고, 최적화하고, 시각화하고, 개선 효과를 보고서로 증명하기 위한 reusable toolkit**이다.
 
+OnMaruBE consumer의 모듈별 병렬 CI, baseline benchmark, release gate, remediation 정책의 canonical 상세 요구사항은 [OnMaruBE 모듈별 병렬 CI·Benchmark Control Plane PRD](prd/onmarube-parallel-ci-benchmark.md)에 둔다.
+
 ---
 
 # 프로젝트의 핵심 철학
