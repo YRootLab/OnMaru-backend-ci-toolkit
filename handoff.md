@@ -1,6 +1,10 @@
 # handoff.md
 
 Current work:
+- Summary: Define typed module benchmark evidence manifest for comparison-ready provenance.
+- Issue/PR: #34 / pending
+- Branch: feature/34-module-evidence-manifest
+
 - Summary: Add installable CLI commands and non-root runtime image for consumer adoption.
 - Issue/PR: #25 / next PR pending
 - Branch: feature/issue-25-cli-runtime
