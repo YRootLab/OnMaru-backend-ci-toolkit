@@ -16,6 +16,7 @@ permissions:
 jobs:
   benchmark:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_call' }}
     steps:
       - uses: actions/checkout@v4
         with: {ref: ${{ inputs.commit-sha }} }
@@ -25,8 +26,8 @@ jobs:
           COMMIT_SHA: ${{ inputs.commit-sha }}
           IMAGE_DIGEST: ${{ inputs.image-digest }}
         run: test -n "$RELEASE_TAG" && test -n "$COMMIT_SHA" && test -n "$IMAGE_DIGEST"
-      - name: Install test runner
-        run: python -m pip install --disable-pip-version-check pytest
+      - name: Install pinned CI dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements-ci.txt
       - name: Run fixture-safe verification
         run: bash scripts/verify_toolkit.sh
       - name: Publish evidence

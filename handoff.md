@@ -1,16 +1,16 @@
 # handoff.md
 
 Current work:
-- Summary: Complete JUnit, pytest, Gradle Profiler, Docker, and system collectors with explicit evidence quality.
-- Issue/PR: #7 / next PR pending
-- Branch: feature/issue-7-collector-completion
+- Summary: Harden CI reproducibility, coverage enforcement, dependency audit reporting, and reusable workflow health.
+- Issue/PR: #23 / next PR pending
+- Branch: fix/issue-23-ci-reproducibility
 
 Touched files:
-- Gradle Profiler collector, JUnit/pytest count metadata, system CPU metrics, fixtures, and collector tests
+- Pinned CI requirements, source coverage gate, dependency audit artifact, workflow trigger guard, generated-file ignore rules, and tests
 
 Next step:
-- Merge the W3 PR after CI and verify Issue #7 closes automatically.
-- Close already-merged report/workflow issues and reconcile root Issue #1.
+- Verify CI workflow health and merge the P0 DevOps hardening PR.
+- Continue observability telemetry implementation from Issue #26.
 
 Open risk or decision:
 - GitHub branch protection is not configured yet.

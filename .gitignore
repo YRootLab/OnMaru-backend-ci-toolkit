@@ -1,0 +1,5 @@
+.coverage
+htmlcov/
+artifacts/
+__pycache__/
+*.py[cod]
