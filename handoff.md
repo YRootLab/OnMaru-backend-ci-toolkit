@@ -1,6 +1,24 @@
 # handoff.md
 
 Current work:
+- Summary: Correct module benchmark comparability so every performance-eligible sample carries a typed environment/configuration identity.
+- Issue/PR: #44 / PR pending
+- Branch: fix/44-evidence-environment-identity
+
+Touched files:
+- `src/pipeline_toolkit/contracts/module_evidence.py`, `src/pipeline_toolkit/compare/module_benchmark.py`, `tests/test_module_evidence.py`, `tests/test_module_benchmark_comparison.py`, and this handoff entry only.
+
+Verification:
+- RED: focused tests failed because `EnvironmentIdentity` and `pipeline_toolkit.compare.module_benchmark` did not exist.
+- GREEN: focused environment-identity contract/comparison suite passed (16 tests).
+- Full: `bash scripts/verify_toolkit.sh` passed (69 tests, 91% coverage, workflow security verification).
+
+Next step:
+- Open a Korean #44 corrective PR into `develop`; do not merge it. #43 must rebase onto this contract before its blocked comparison/report work proceeds.
+
+Open risk or decision:
+- Environment identity is required only for complete successful evidence; failed or incomplete evidence remains valid but is never performance eligible.
+
 - Summary: Add deterministic `module-plan` CLI JSON output from the #33 catalog planner.
 - Issue/PR: #39 / PR pending
 - Branch: feature/39-cli-module-plan
