@@ -1,6 +1,7 @@
 import pytest
 
 from pipeline_toolkit.contracts.module_evidence import (
+    EnvironmentIdentity,
     ModuleBenchmarkEvidence,
     ResourceUsage,
     RunProvenance,
@@ -21,6 +22,16 @@ def _valid_evidence(**overrides):
             commit_sha="a" * 40,
             workflow="verify",
             job="catalog",
+        ),
+        "environment_identity": EnvironmentIdentity(
+            runner_image="ubuntu-24.04@sha256:runner",
+            java_version="21.0.8",
+            python_version="3.12.11",
+            cache_state="warm",
+            database_fixture="postgres-16.4-fixture-20260923",
+            cpu_memory_profile="4cpu-16gb",
+            dependency_mode="locked",
+            config_catalog_hash="sha256:catalog",
         ),
         "artifact_uri": "artifact://github-actions/123/catalog-results.json",
     }
@@ -63,4 +74,29 @@ def test_complete_successful_evidence_requires_a_metric_value():
     evidence = _valid_evidence(metric_value=None)
 
     with pytest.raises(ValueError, match="metric_value"):
+        validate_module_evidence(evidence)
+
+
+def test_complete_successful_evidence_requires_a_complete_environment_identity():
+    evidence = _valid_evidence(environment_identity=None)
+
+    with pytest.raises(ValueError, match="environment_identity"):
+        validate_module_evidence(evidence)
+
+
+def test_environment_identity_rejects_blank_required_field():
+    evidence = _valid_evidence(
+        environment_identity=EnvironmentIdentity(
+            runner_image=" ",
+            java_version="21.0.8",
+            python_version="3.12.11",
+            cache_state="warm",
+            database_fixture="postgres-16.4-fixture-20260923",
+            cpu_memory_profile="4cpu-16gb",
+            dependency_mode="locked",
+            config_catalog_hash="sha256:catalog",
+        )
+    )
+
+    with pytest.raises(ValueError, match="environment_identity.runner_image"):
         validate_module_evidence(evidence)

@@ -28,6 +28,18 @@ class RunProvenance:
 
 
 @dataclass(frozen=True)
+class EnvironmentIdentity:
+    runner_image: str
+    java_version: str
+    python_version: str
+    cache_state: str
+    database_fixture: str
+    cpu_memory_profile: str
+    dependency_mode: str
+    config_catalog_hash: str
+
+
+@dataclass(frozen=True)
 class ModuleBenchmarkEvidence:
     module_id: str
     run_id: str
@@ -37,6 +49,7 @@ class ModuleBenchmarkEvidence:
     resource: ResourceUsage
     provenance: RunProvenance
     artifact_uri: Optional[str]
+    environment_identity: Optional[EnvironmentIdentity] = None
     status: Union[EvidenceStatus, str] = EvidenceStatus.SUCCESS
     complete: bool = True
 
@@ -45,7 +58,12 @@ class ModuleBenchmarkEvidence:
         return (
             self.status == EvidenceStatus.SUCCESS
             or self.status == EvidenceStatus.SUCCESS.value
-        ) and self.complete and self.metric_value is not None and bool(self.artifact_uri)
+        ) and (
+            self.complete
+            and self.metric_value is not None
+            and bool(self.artifact_uri)
+            and self.environment_identity is not None
+        )
 
 
 def validate_module_evidence(evidence: ModuleBenchmarkEvidence) -> None:
@@ -65,6 +83,12 @@ def validate_module_evidence(evidence: ModuleBenchmarkEvidence) -> None:
         _validate_artifact_uri(evidence.artifact_uri)
     elif evidence.complete and evidence.status in (EvidenceStatus.SUCCESS, EvidenceStatus.SUCCESS.value):
         raise ValueError("complete successful evidence requires artifact_uri")
+    if evidence.complete and evidence.status in (EvidenceStatus.SUCCESS, EvidenceStatus.SUCCESS.value):
+        if evidence.environment_identity is None:
+            raise ValueError("complete successful evidence requires environment_identity")
+        _validate_environment_identity(evidence.environment_identity)
+    elif evidence.environment_identity is not None:
+        _validate_environment_identity(evidence.environment_identity)
 
 
 def _require_text(value: str, field: str) -> None:
@@ -89,6 +113,22 @@ def _validate_resource(resource: ResourceUsage) -> None:
 def _validate_provenance(provenance: RunProvenance) -> None:
     for field in ("repository", "commit_sha", "workflow", "job"):
         _require_text(getattr(provenance, field), f"provenance.{field}")
+
+
+def _validate_environment_identity(identity: EnvironmentIdentity) -> None:
+    if not isinstance(identity, EnvironmentIdentity):
+        raise ValueError("environment_identity must be an EnvironmentIdentity")
+    for field in (
+        "runner_image",
+        "java_version",
+        "python_version",
+        "cache_state",
+        "database_fixture",
+        "cpu_memory_profile",
+        "dependency_mode",
+        "config_catalog_hash",
+    ):
+        _require_text(getattr(identity, field), f"environment_identity.{field}")
 
 
 def _validate_artifact_uri(uri: str) -> None:
