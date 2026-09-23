@@ -1,6 +1,24 @@
 # handoff.md
 
 Current work:
+- Summary: Add deterministic `module-plan` CLI JSON output from the #33 catalog planner.
+- Issue/PR: #39 / PR pending
+- Branch: feature/39-cli-module-plan
+
+Touched files:
+- `src/pipeline_toolkit/cli.py`, `tests/test_cli_module_plan.py`, and this handoff entry only.
+
+Verification:
+- RED: `PYTHONPATH=src python3 -m pytest -q tests/test_cli_module_plan.py` failed because `module-plan` was not a recognized command.
+- GREEN: the focused subprocess contract suite passed (4 tests).
+- Full: `bash scripts/verify_toolkit.sh` passed (53 tests, 91% coverage, workflow security verification).
+
+Next step:
+- Open the #39 Korean PR into `develop`; do not merge it in this task.
+
+Open risk or decision:
+- Invalid catalogs return exit code 2 with diagnostics only on stderr; unavailable or unmapped diffs safely select the full suite.
+
 - Summary: Define typed module benchmark evidence manifest for comparison-ready provenance.
 - Issue/PR: #34 / pending
 - Branch: feature/34-module-evidence-manifest
