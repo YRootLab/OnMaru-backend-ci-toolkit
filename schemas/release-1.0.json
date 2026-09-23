@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://onmaru.dev/schemas/release-1.0.json",
+  "title": "Release identity",
+  "type": "object",
+  "required": ["repository", "tag", "commit_sha", "image_digest", "schema_version"],
+  "properties": {"repository": {"type": "string"}, "tag": {"type": "string"}, "commit_sha": {"type": "string"}, "image_digest": {"type": "string"}, "schema_version": {"const": "1.0"}}
+}
