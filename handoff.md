@@ -1,16 +1,16 @@
 # handoff.md
 
 Current work:
-- Summary: Harden CI reproducibility, coverage enforcement, dependency audit reporting, and reusable workflow health.
-- Issue/PR: #23 / next PR pending
-- Branch: fix/issue-23-ci-reproducibility
+- Summary: Add low-cardinality telemetry, correlation IDs, deterministic event serialization, and redaction.
+- Issue/PR: #26 / next PR pending
+- Branch: feature/issue-26-telemetry-contract
 
 Touched files:
-- Pinned CI requirements, source coverage gate, dependency audit artifact, workflow trigger guard, generated-file ignore rules, and tests
+- Telemetry event model, metric label policy, run/comparison/trace correlation, redaction tests, and serialization fixtures
 
 Next step:
-- Verify CI workflow health and merge the P0 DevOps hardening PR.
-- Continue observability telemetry implementation from Issue #26.
+- Merge the P0 observability telemetry PR after CI.
+- Continue CLI/package and operational dashboard improvements.
 
 Open risk or decision:
 - GitHub branch protection is not configured yet.
