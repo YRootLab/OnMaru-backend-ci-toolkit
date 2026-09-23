@@ -15,4 +15,6 @@ if [ -f pyproject.toml ]; then
   PYTHONPATH=src python3 -m pytest -q
 fi
 
+python3 scripts/verify_workflow_security.py
+
 echo "Toolkit verification passed."
