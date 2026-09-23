@@ -1,16 +1,16 @@
 # handoff.md
 
 Current work:
-- Summary: Separate GitHub Actions DAG queue, execution, work, wall-clock, idle, and critical-path metrics.
-- Issue/PR: #5 / next PR pending
-- Branch: feature/issue-5-dag-time-semantics
+- Summary: Implement repeated release comparison policy, statistics, regression classification, and resource deltas.
+- Issue/PR: #6 / next PR pending
+- Branch: feature/issue-6-statistical-comparison
 
 Touched files:
-- DAG Job queued timestamps, expanded DagMetrics, payload normalization, and timing tests
+- ComparisonPolicy, release comparison aggregation, sample statistics, resource deltas, and tests
 
 Next step:
-- Merge the W4 PR after CI and verify Issue #5 closes automatically.
-- Continue remaining comparison and consumer integration after merge.
+- Merge the W5 PR after CI and verify Issue #6 closes automatically.
+- Continue remaining consumer integration after merge.
 
 Open risk or decision:
 - GitHub branch protection is not configured yet.
