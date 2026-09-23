@@ -1,21 +1,21 @@
 # handoff.md
 
 Current work:
-- Summary: Initialize project harness and Git Flow release automation.
-- Issue/PR: none
-- Branch: master
+- Summary: Implement Issue #1 release-aware CI/CD benchmark and evidence toolkit.
+- Issue/PR: #1 / pending PR
+- Branch: feature/issue-1-release-aware-toolkit
 
 Touched files:
-- AGENTS.md and harness entry files
-- GitHub CI and release workflows
+- Toolkit package, versioned schemas, fixtures, tests, and reusable workflow
 
 Next step:
-- Create or connect the first GitHub Issue before non-trivial implementation.
-- Provision and protect the `develop` integration branch.
+- Implement the W0 contract gate, then integrate W1/W2/W4/W5 in parallel waves.
+- Run the canonical verification and publish a PR targeting `develop`.
 
 Open risk or decision:
 - GitHub branch protection is not configured yet.
-- The repository currently has no `develop` branch, source package, or test suite.
+- Full external tool execution is optional; collectors must preserve missing/invalid evidence explicitly.
+- Automatic approval/merge is subject to repository rules and CI results.
 
 Ad hoc requests captured this session:
-- [ ] Extend `scripts/verify_toolkit.sh` when the Python toolkit implementation lands.
+- [x] Extend `scripts/verify_toolkit.sh` when the Python toolkit implementation lands.
