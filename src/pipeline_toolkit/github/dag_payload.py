@@ -14,5 +14,5 @@ def jobs_from_payload(payload: dict) -> list[Job]:
         conclusion = item.get("conclusion") or item.get("status") or "unknown"
         conclusion = {"failure": "failed", "timed_out": "timeout", "cancelled": "cancelled"}.get(conclusion, conclusion)
         needs = tuple(names[name] for name in item.get("needs", ()) if name in names)
-        result.append(Job(str(item.get("id")), needs, _timestamp(item.get("started_at")), _timestamp(item.get("completed_at")), conclusion))
+        result.append(Job(str(item.get("id")), needs, _timestamp(item.get("started_at")), _timestamp(item.get("completed_at")), conclusion, _timestamp(item.get("queued_at"))))
     return result

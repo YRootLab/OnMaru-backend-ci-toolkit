@@ -9,6 +9,7 @@ class Job:
     started_at: datetime | None = None
     completed_at: datetime | None = None
     status: str = "success"
+    queued_at: datetime | None = None
 
 @dataclass(frozen=True)
 class DagMetrics:
@@ -17,6 +18,8 @@ class DagMetrics:
     critical_path_seconds: float
     critical_path: tuple[str, ...]
     warnings: tuple[str, ...] = ()
+    queue_seconds: float = 0
+    idle_seconds: float = 0
 
 def critical_path(jobs: list[Job]) -> DagMetrics:
     known = [j for j in jobs if j.started_at and j.completed_at]
@@ -32,4 +35,7 @@ def critical_path(jobs: list[Job]) -> DagMetrics:
     paths = [visit(j) for j in known]
     start, end = min(j.started_at for j in known), max(j.completed_at for j in known)
     longest = max(paths, default=(0, ()))
-    return DagMetrics(sum((j.completed_at-j.started_at).total_seconds() for j in known), (end-start).total_seconds(), longest[0], longest[1], warnings)
+    work = sum((j.completed_at-j.started_at).total_seconds() for j in known)
+    wall = (end-start).total_seconds()
+    queue = sum((j.started_at-j.queued_at).total_seconds() for j in known if j.queued_at)
+    return DagMetrics(work, wall, longest[0], longest[1], warnings, queue, max(0, wall-longest[0]))

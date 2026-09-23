@@ -1,15 +1,15 @@
 # handoff.md
 
 Current work:
-- Summary: Implement release/deployment identity and digest matching contracts.
-- Issue/PR: #4 / next PR pending
-- Branch: feature/issue-4-release-evidence-contracts
+- Summary: Separate GitHub Actions DAG queue, execution, work, wall-clock, idle, and critical-path metrics.
+- Issue/PR: #5 / next PR pending
+- Branch: feature/issue-5-dag-time-semantics
 
 Touched files:
-- Deployment contract, release identity comparison, digest/tag validation, and tests
+- DAG Job queued timestamps, expanded DagMetrics, payload normalization, and timing tests
 
 Next step:
-- Merge the W2 PR after CI and verify Issue #4 closes automatically.
+- Merge the W4 PR after CI and verify Issue #5 closes automatically.
 - Continue remaining comparison and consumer integration after merge.
 
 Open risk or decision:
