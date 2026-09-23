@@ -49,6 +49,14 @@ class Release:
     schema_version: str = SCHEMA_VERSION
 
 @dataclass(frozen=True)
+class Deployment:
+    environment: str
+    release_tag: str
+    image_digest: str
+    deployed_at: str
+    schema_version: str = SCHEMA_VERSION
+
+@dataclass(frozen=True)
 class BenchmarkRun:
     run_id: str
     release: Release
@@ -87,6 +95,10 @@ def validate(record: Any) -> None:
     if isinstance(record, Release):
         for name in ("repository", "tag", "commit_sha", "image_digest"):
             if not getattr(record, name): raise ValueError(f"release.{name} is required")
+    elif isinstance(record, Deployment):
+        if not all((record.environment, record.release_tag, record.image_digest, record.deployed_at)):
+            raise ValueError("incomplete deployment")
+        if not record.image_digest.startswith("sha256:"): raise ValueError("deployment.image_digest must be sha256")
     elif isinstance(record, Artifact):
         if not record.uri or not record.sha256 or not record.kind: raise ValueError("incomplete artifact")
     elif isinstance(record, Evidence):
