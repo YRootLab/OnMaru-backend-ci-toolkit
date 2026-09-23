@@ -23,7 +23,8 @@ def collect_pytest_xml(path: str | Path, benchmark_id: str = "pytest") -> Eviden
         return Evidence(benchmark_id, None, "seconds", Quality.INVALID, "pytest.xml", warnings=(str(exc),))
     cases = list(root.findall(".//testcase"))
     failed = int(root.attrib.get("failures", 0)) + int(root.attrib.get("errors", 0))
+    skipped = int(root.attrib.get("skipped", 0))
     duration = float(root.attrib.get("time", 0))
     slowest = sorted(((float(c.attrib.get("time", 0)), c.attrib.get("name", "unknown")) for c in cases), reverse=True)[:5]
-    warnings = (f"tests={len(cases)}", *tuple(f"slowest={name}:{seconds}" for seconds, name in slowest))
+    warnings = (f"tests={len(cases)}", f"failures={failed}", f"skipped={skipped}", *tuple(f"slowest={name}:{seconds}" for seconds, name in slowest))
     return Evidence(benchmark_id, duration, "seconds", Quality.FAILED if failed else Quality.SUCCESS, "pytest.xml", warnings=warnings)

@@ -11,7 +11,8 @@ def collect_junit(path: str | Path, benchmark_id: str = "tests") -> list[Evidenc
     suites = [root] if root.tag == "testsuite" else list(root.findall(".//testsuite"))
     if not suites: return [Evidence(benchmark_id, None, "seconds", Quality.INVALID, "junit", warnings=("no testsuite",))]
     total = sum(float(s.attrib.get("time", 0)) for s in suites)
+    tests = sum(int(s.attrib.get("tests", 0)) for s in suites)
     failed = sum(int(s.attrib.get("failures", 0)) + int(s.attrib.get("errors", 0)) for s in suites)
     skipped = sum(int(s.attrib.get("skipped", 0)) for s in suites)
     quality = Quality.FAILED if failed else Quality.SUCCESS
-    return [Evidence(benchmark_id, total, "seconds", quality, "junit", warnings=(f"failed={failed}", f"skipped={skipped}"))]
+    return [Evidence(benchmark_id, total, "seconds", quality, "junit", warnings=(f"tests={tests}", f"failures={failed}", f"skipped={skipped}"))]
