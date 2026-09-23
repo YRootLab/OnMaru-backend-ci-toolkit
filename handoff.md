@@ -1,16 +1,16 @@
 # handoff.md
 
 Current work:
-- Summary: Harden command execution timeout, signal, retry, and partial-output evidence.
-- Issue/PR: #3 / next PR pending
-- Branch: feature/issue-3-command-runner-hardening
+- Summary: Implement release/deployment identity and digest matching contracts.
+- Issue/PR: #4 / next PR pending
+- Branch: feature/issue-4-release-evidence-contracts
 
 Touched files:
-- Command runner result model, process timeout handling, signal classification, retry history, and tests
+- Deployment contract, release identity comparison, digest/tag validation, and tests
 
 Next step:
-- Merge the W1 PR after CI and verify Issue #3 closes automatically.
-- Continue remaining consumer integration after merge.
+- Merge the W2 PR after CI and verify Issue #4 closes automatically.
+- Continue remaining comparison and consumer integration after merge.
 
 Open risk or decision:
 - GitHub branch protection is not configured yet.
