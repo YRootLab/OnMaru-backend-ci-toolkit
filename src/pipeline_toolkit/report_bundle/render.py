@@ -43,7 +43,7 @@ def render_easy_draft(bundle: ReportBundleInput) -> str:
         *_easy_fact_lines(eligible),
         "",
         "## 아직 성과로 말할 수 없는 부분",
-        *_ineligible_lines(ineligible),
+        *_easy_ineligible_lines(ineligible),
         *_plain_lines(bundle.limitations),
         "",
         "## 다음에 확인할 일",
@@ -115,7 +115,31 @@ def _fact_lines(facts: tuple[ReportFact, ...]) -> list[str]:
 
 
 def _easy_fact_lines(facts: tuple[ReportFact, ...]) -> list[str]:
-    return [f"- {fact.name}: {_number(fact.value)} {fact.unit}" for fact in facts] or ["- 아직 비교 가능한 성공 측정값이 없습니다."]
+    return [
+        f"- {fact.name}: {_number(fact.value)} {fact.unit} "
+        f"[실행 기록 보기]({fact.source_url})"
+        for fact in facts
+    ] or ["- 아직 비교 가능한 성공 측정값이 없습니다."]
+
+
+def _easy_ineligible_lines(facts: tuple[ReportFact, ...]) -> list[str]:
+    return [
+        f"- {fact.name}: {_easy_ineligible_reason(fact)} "
+        f"[실행 기록 보기]({fact.source_url})"
+        for fact in facts
+    ] or ["- 아직 성과로 말할 수 없는 측정값이 없습니다."]
+
+
+def _easy_ineligible_reason(fact: ReportFact) -> str:
+    if fact.status == "failed":
+        return "이번 측정은 끝까지 성공하지 못해, 개선 성과로 사용하지 않음."
+    if fact.status == "cancelled":
+        return "이번 측정은 중간에 멈춰, 개선 성과로 사용하지 않음."
+    if fact.status == "timeout":
+        return "이번 측정은 정해진 시간 안에 끝나지 않아, 개선 성과로 사용하지 않음."
+    if fact.status == "missing":
+        return "이번 측정 기록을 찾을 수 없어, 개선 성과로 사용하지 않음."
+    return "비교 조건이 같지 않아, 개선 성과로 사용하지 않음."
 
 
 def _ineligible_lines(facts: tuple[ReportFact, ...]) -> list[str]:
