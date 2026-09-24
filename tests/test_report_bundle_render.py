@@ -113,3 +113,33 @@ def test_successful_but_non_comparable_fact_is_not_easy_improvement_evidence():
     assert "different SHA candidate" in limitations
     assert "개선 성과로 사용하지 않음" in limitations
     assert "comparable=false" not in rendered
+
+
+def test_easy_draft_escapes_markdown_structure_in_evidence_link_destination():
+    base = _bundle()
+    unsafe_url = "https://evidence.example/run)[untrusted-link](https://attacker.example)"
+    bundle = ReportBundleInput(
+        title=base.title,
+        observed_at=base.observed_at,
+        summary=base.summary,
+        facts=(
+            ReportFact(
+                name="unsafe evidence",
+                value=454,
+                unit="seconds",
+                status="success",
+                source_url=unsafe_url,
+                comparable=True,
+            ),
+        ),
+        limitations=base.limitations,
+        next_steps=base.next_steps,
+    )
+
+    rendered = render_easy_draft(bundle)
+
+    assert "[untrusted-link](https://attacker.example)" not in rendered
+    assert (
+        "[실행 기록 보기](https://evidence.example/run%29%5Buntrusted-link%5D%28https://attacker.example%29)"
+        in rendered
+    )

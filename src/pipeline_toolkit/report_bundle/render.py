@@ -1,5 +1,7 @@
 """Deterministic dual-audience renderers for canonical report facts."""
 
+from urllib.parse import quote
+
 from .model import ReportBundleInput, ReportFact, is_performance_eligible
 
 
@@ -117,7 +119,7 @@ def _fact_lines(facts: tuple[ReportFact, ...]) -> list[str]:
 def _easy_fact_lines(facts: tuple[ReportFact, ...]) -> list[str]:
     return [
         f"- {fact.name}: {_number(fact.value)} {fact.unit} "
-        f"[실행 기록 보기]({fact.source_url})"
+        f"[실행 기록 보기]({_markdown_destination(fact.source_url)})"
         for fact in facts
     ] or ["- 아직 비교 가능한 성공 측정값이 없습니다."]
 
@@ -125,7 +127,7 @@ def _easy_fact_lines(facts: tuple[ReportFact, ...]) -> list[str]:
 def _easy_ineligible_lines(facts: tuple[ReportFact, ...]) -> list[str]:
     return [
         f"- {fact.name}: {_easy_ineligible_reason(fact)} "
-        f"[실행 기록 보기]({fact.source_url})"
+        f"[실행 기록 보기]({_markdown_destination(fact.source_url)})"
         for fact in facts
     ] or ["- 아직 성과로 말할 수 없는 측정값이 없습니다."]
 
@@ -164,6 +166,11 @@ def _plain_lines(entries: tuple[str, ...]) -> list[str]:
 
 def _number(value: float) -> str:
     return format(value, "g")
+
+
+def _markdown_destination(url: str) -> str:
+    """Encode Markdown structural characters while preserving normal URL syntax."""
+    return quote(url, safe=":/?&=#%+;,@!$'*-._~")
 
 
 def _document(lines: list[str]) -> str:
