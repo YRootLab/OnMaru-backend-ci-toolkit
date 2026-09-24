@@ -82,7 +82,7 @@ def test_cross_repository_caller_pins_toolkit_checkout_to_its_explicit_immutable
         "repository": "YRootLab/OnMaru-backend",
         "toolkit_ref": "d8d67b3102164e0fa340322bef1d3f1d9b081153",
     }
-    assert caller_contract["repository"] != "YRootLab/OnMaru-modular-backend-pipeline-toolkit"
+    assert caller_contract["repository"] != "YRootLab/OnMaru-backend-ci-toolkit"
     assert len(caller_contract["toolkit_ref"]) == 40
     assert caller_contract["toolkit_ref"].islower()
 
@@ -94,6 +94,6 @@ def test_cross_repository_caller_pins_toolkit_checkout_to_its_explicit_immutable
 
     assert validation["env"]["TOOLKIT_REF"] == "${{ inputs.toolkit_ref }}"
     assert '[[ "$TOOLKIT_REF" =~ ^[0-9a-f]{40}$ ]]' in validation["run"]
-    assert toolkit_checkout["with"]["repository"] == "YRootLab/OnMaru-modular-backend-pipeline-toolkit"
+    assert toolkit_checkout["with"]["repository"] == "YRootLab/OnMaru-backend-ci-toolkit"
     assert toolkit_checkout["with"]["ref"] == "${{ inputs.toolkit_ref }}"
     assert "github.workflow_sha" not in text

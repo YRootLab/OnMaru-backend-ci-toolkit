@@ -1,5 +1,11 @@
 # handoff.md
 
+- **Date**: 2026-09-24 toolkit repository-name migration
+- **Branch**: `docs/50-repository-name-migration`
+- **Related Issue**: #50 (unblocks OnMaruBE #365)
+- **Scope**: reusable workflow internal checkout, active workflow references, PRD/adoption documentation, and work-graph repository metadata only
+- **Verification**: contract test changed first and failed against the former checkout name; full toolkit verification is required before merge
+
 Current work:
 - Summary: Fix reusable benchmark checkout so a cross-repository caller explicitly supplies the immutable toolkit commit SHA instead of leaking its caller workflow SHA into toolkit checkout.
 - Issue/PR: #48 / PR pending

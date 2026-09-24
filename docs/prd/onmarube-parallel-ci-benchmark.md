@@ -1,7 +1,7 @@
 # OnMaruBE 모듈별 병렬 CI·Benchmark Control Plane PRD
 
 상태: Proposed  
-소유: `YRootLab/OnMaru-modular-backend-pipeline-toolkit`  
+소유: `YRootLab/OnMaru-backend-ci-toolkit`
 Consumer: `YRootLab/OnMaru-backend`  
 관련: ADR-0003, OnMaruBE #255
 
@@ -86,7 +86,7 @@ Toolkit은 다음 reusable workflow를 제공한다.
 ```yaml
 jobs:
   verify:
-    uses: YRootLab/OnMaru-modular-backend-pipeline-toolkit/.github/workflows/module-benchmark.yml@<immutable-release>
+    uses: YRootLab/OnMaru-backend-ci-toolkit/.github/workflows/module-benchmark.yml@<immutable-release>
     with:
       catalog_path: .github/benchmark-modules.yml
       mode: pr

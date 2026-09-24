@@ -5,7 +5,7 @@ The consumer repository passes immutable release identity into the reusable work
 ```yaml
 jobs:
   benchmark:
-    uses: YRootLab/OnMaru-modular-backend-pipeline-toolkit/.github/workflows/reusable-benchmark.yml@develop
+    uses: YRootLab/OnMaru-backend-ci-toolkit/.github/workflows/reusable-benchmark.yml@develop
     with:
       release-tag: ${{ github.ref_name }}
       commit-sha: ${{ github.sha }}
