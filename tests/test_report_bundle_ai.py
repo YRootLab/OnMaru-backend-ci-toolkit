@@ -1,4 +1,6 @@
 import json
+import urllib.error
+import urllib.request
 
 import pytest
 
@@ -35,6 +37,37 @@ def test_openai_adapter_sends_prompt_without_api_key_in_body():
     assert seen["authorization"] == "Bearer secret-key"
 
 
+def test_default_opener_rejects_redirect_before_follow_up_request(monkeypatch):
+    seen = {"requests": 0}
+
+    class RedirectingOpener:
+        def __init__(self, handler):
+            self.handler = handler
+
+        def open(self, request, timeout):
+            seen["requests"] += 1
+            self.handler.redirect_request(
+                request,
+                fp=None,
+                code=302,
+                msg="Found",
+                headers={},
+                newurl="https://attacker.example/steal",
+            )
+            seen["requests"] += 1
+            return FakeResponse("{}")
+
+    def build_opener(handler):
+        return RedirectingOpener(handler)
+
+    monkeypatch.setattr(urllib.request, "build_opener", build_opener)
+
+    with pytest.raises(urllib.error.HTTPError, match="redirect"):
+        generate_openai_markdown("facts", "gpt-5", "secret-key")
+
+    assert seen["requests"] == 1
+
+
 @pytest.mark.parametrize(
     "audience, markdown",
     [
@@ -46,7 +79,17 @@ def test_validate_ai_markdown_accepts_required_headings(audience, markdown):
     assert validate_ai_markdown(markdown, audience) == markdown
 
 
-@pytest.mark.parametrize("markdown", ["# x\n21% 빨라졌다", "# x\nCI is 21% faster"])
+@pytest.mark.parametrize(
+    "markdown",
+    [
+        "# x\n21% 빨라졌다",
+        "# x\nCI is 21% faster",
+        "# x\nCI performance improved 21%.",
+        "# x\nThe pipeline is twice as fast.",
+        "# x\nCI가 이전보다 21% 더 빨라졌다.",
+        "# x\n성능 개선 폭은 21%입니다.",
+    ],
+)
 def test_validate_ai_markdown_rejects_unsupported_performance_claims(markdown):
     with pytest.raises(ValueError, match="performance claim"):
         validate_ai_markdown(markdown, "easy")

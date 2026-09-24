@@ -3,6 +3,7 @@
 import json
 import re
 from typing import Any, Callable
+import urllib.error
 import urllib.request
 
 
@@ -22,18 +23,44 @@ _HEADINGS = {
     }),
 }
 _UNSUPPORTED_PERFORMANCE_CLAIM = re.compile(
-    r"(?:\b\d+(?:\.\d+)?\s*%\s*(?:faster|improved|faster|reduced|shorter)\b|"
-    r"\b(?:improved|reduced|shortened)\s+by\s+\d+(?:\.\d+)?\s*%\b|"
-    r"\d+(?:\.\d+)?\s*%\s*(?:빨라졌|개선(?:됐|되었|됨)?|향상(?:됐|되었|됨)?|단축(?:됐|되었|됨)?|감소(?:했|됐|되었|됨)?))",
-    re.IGNORECASE,
+    r"""
+    (?:
+        \b\d+(?:\.\d+)?\s*%\s*(?:faster|improved|reduced|shorter)\b
+      | \b(?:improved|improvement|reduced|reduction|shortened)\s+(?:by\s+)?\d+(?:\.\d+)?\s*%
+      | \b(?:ci\s+)?performance\s+(?:has\s+)?(?:improved|increased|reduced)\s+(?:by\s+)?\d+(?:\.\d+)?\s*%
+      | \b(?:the\s+)?(?:ci|pipeline|build|test(?:\s+suite)?)\s+(?:is|was|has\s+become)\s+(?:twice|three\s+times|\d+(?:\.\d+)?\s+times)\s+as\s+(?:fast|quick|efficient)\b
+      | \b(?:ci|pipeline|build|test(?:\s+suite)?|performance)\s+(?:is|was|has\s+become)\s+(?:more\s+|much\s+|significantly\s+)?(?:faster|quicker|better|more\s+efficient)\b
+      | \d+(?:\.\d+)?\s*%\s*(?:더\s*)?(?:빨라졌|개선(?:됐|되었|됨)?|향상(?:됐|되었|됨)?|단축(?:됐|되었|됨)?|감소(?:했|됐|되었|됨)?)
+      | (?:성능|속도|CI|파이프라인)\s*(?:개선|향상)\s*폭?\s*(?:은|는|이|가)?\s*\d+(?:\.\d+)?\s*%
+      | (?:CI|파이프라인|성능|속도).{0,40}(?:이전보다|더)\s*(?:\d+(?:\.\d+)?\s*%\s*)?(?:더\s*)?(?:빨라졌|개선(?:됐|되었|됨)?|향상(?:됐|되었|됨)?|단축(?:됐|되었|됨)?)
+    )
+    """,
+    re.IGNORECASE | re.VERBOSE,
 )
+
+
+class _RejectAllRedirects(urllib.request.HTTPRedirectHandler):
+    """Stop redirects before urllib can create a second authenticated request."""
+
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(
+            request.full_url,
+            code,
+            "redirect rejected for authenticated OpenAI request",
+            headers,
+            fp,
+        )
+
+
+def _open_without_redirects(request: urllib.request.Request, timeout: int) -> Any:
+    return urllib.request.build_opener(_RejectAllRedirects()).open(request, timeout=timeout)
 
 
 def generate_openai_markdown(
     prompt: str,
     model: str,
     api_key: str,
-    opener: Callable[..., Any] = urllib.request.urlopen,
+    opener: Callable[..., Any] = _open_without_redirects,
 ) -> str:
     """Return OpenAI Markdown content without placing the API key in the body."""
     _require_non_empty(prompt, "prompt")
