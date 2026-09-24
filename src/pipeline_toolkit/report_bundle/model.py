@@ -6,7 +6,7 @@ import json
 import math
 from pathlib import Path
 import re
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 from urllib.parse import parse_qsl, urlsplit
 
 
@@ -165,6 +165,8 @@ def _safe_https_url(value: str) -> str:
         or parsed.username is not None
         or parsed.password is not None
         or port is not None and not 0 < port <= 65535
+        or parsed.fragment
+        or ";" in parsed.query
         or any(character.isspace() for character in value)
         or any(_is_secret_like_key(key) for key, _ in parse_qsl(parsed.query, keep_blank_values=True))
     ):

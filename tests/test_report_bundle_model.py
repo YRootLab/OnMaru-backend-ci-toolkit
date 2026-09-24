@@ -73,6 +73,21 @@ def test_load_report_bundle_rejects_secret_like_keys_recursively(tmp_path):
         load_report_bundle(source)
 
 
+@pytest.mark.parametrize("source_url", [
+    "https://example.test/run#api_token=do-not-store",
+    "https://example.test/run?state=ok;api_token=do-not-store",
+])
+def test_load_report_bundle_rejects_source_url_secret_bypasses(tmp_path, source_url):
+    source = tmp_path / "unsafe-url.json"
+    source.write_text(json.dumps({"title": "x", "observed_at": "2026-09-24", "summary": "x",
+        "facts": [{"name": "x", "value": 1, "unit": "seconds", "status": "success",
+                   "source_url": source_url, "comparable": True}],
+        "limitations": ["x"], "next_steps": ["x"]}), encoding="utf-8")
+
+    with pytest.raises(ReportBundleValidationError):
+        load_report_bundle(source)
+
+
 @pytest.mark.parametrize("status", ["failed", "cancelled", "timeout", "missing"])
 def test_only_successful_comparable_facts_are_performance_eligible(tmp_path, status):
     source = tmp_path / "ineligible.json"
