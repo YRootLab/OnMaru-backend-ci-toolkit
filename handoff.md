@@ -1,5 +1,11 @@
 # handoff.md
 
+- **Date**: 2026-09-24 report bundle design
+- **Branch**: `docs/56-report-bundle-design`
+- **Related Issue**: #56
+- **Scope**: Define a single-input report bundle that creates deterministic developer and easy-reader drafts/prompts, with an opt-in AI adapter and strict `docs/reports` versus external inbox boundary.
+- **Verification**: design self-review pending; no implementation is included in this branch.
+
 - **Date**: 2026-09-24 report publication boundary
 - **Branch**: `docs/54-publish-ci-observation-report`
 - **Related Issue**: #54
