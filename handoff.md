@@ -1,5 +1,11 @@
 # handoff.md
 
+- **Date**: 2026-09-24 report publication boundary
+- **Branch**: `docs/54-publish-ci-observation-report`
+- **Related Issue**: #54
+- **Scope**: Publish the evidence-based OnMaru Backend CI observation report and its detailed-report prompt under `docs/reports`. Keep the easy, portfolio-oriented version outside the repository at `OnMaru/inbox/reports`.
+- **Verification**: pending `git diff --check` and `bash scripts/verify_toolkit.sh`.
+
 - **Date**: 2026-09-24 matrix concurrency repair
 - **Branch**: `fix/52-module-matrix-concurrency`
 - **Related Issue**: #52 (blocks OnMaruBE #365)
