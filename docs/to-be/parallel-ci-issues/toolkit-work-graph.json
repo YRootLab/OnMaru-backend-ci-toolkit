@@ -1,5 +1,5 @@
 {
-  "repo": "YRootLab/OnMaru-modular-backend-pipeline-toolkit",
+  "repo": "YRootLab/OnMaru-backend-ci-toolkit",
   "root": {
     "title": "Reusable parallel benchmark control plane for OnMaruBE",
     "goal": "Provide a versioned GitHub Actions control plane that lets consumers measure, compare, and improve parallel module CI without runtime imports.",

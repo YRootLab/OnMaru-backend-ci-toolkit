@@ -79,7 +79,7 @@ jobs:
       - name: Checkout immutable toolkit implementation
         uses: actions/checkout@v4
         with:
-          repository: YRootLab/OnMaru-modular-backend-pipeline-toolkit
+          repository: YRootLab/OnMaru-backend-ci-toolkit
           ref: ${{ inputs.toolkit_ref }}
           path: .pipeline-toolkit
           persist-credentials: false
