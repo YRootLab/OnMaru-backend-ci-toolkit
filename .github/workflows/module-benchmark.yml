@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
-      group: module-benchmark-${{ github.repository }}-${{ matrix.resource_profile }}
+      group: module-benchmark-${{ github.repository }}-${{ matrix.id }}
       cancel-in-progress: false
     strategy:
       fail-fast: false

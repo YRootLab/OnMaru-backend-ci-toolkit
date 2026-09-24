@@ -1,5 +1,11 @@
 # handoff.md
 
+- **Date**: 2026-09-24 matrix concurrency repair
+- **Branch**: `fix/52-module-matrix-concurrency`
+- **Related Issue**: #52 (blocks OnMaruBE #365)
+- **Scope**: module-test concurrency key and its workflow contract test only
+- **Verification**: changing the contract from resource profile to module ID reproduced the failure; full toolkit verification required before merge
+
 - **Date**: 2026-09-24 toolkit repository-name migration
 - **Branch**: `docs/50-repository-name-migration`
 - **Related Issue**: #50 (unblocks OnMaruBE #365)
