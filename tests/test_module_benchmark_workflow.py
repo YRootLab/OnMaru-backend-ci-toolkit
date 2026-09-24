@@ -71,7 +71,8 @@ def test_workflow_is_read_only_secret_free_and_publishes_evidence_artifacts():
     assert "actions/download-artifact@v4" in text
     assert "module-evidence-${{ matrix.id }}" in text
     assert "module-benchmark-report" in text
-    assert "module-benchmark-${{ github.repository }}-${{ matrix.resource_profile }}" in text
+    assert "module-benchmark-${{ github.repository }}-${{ matrix.id }}" in text
+    assert "module-benchmark-${{ github.repository }}-${{ matrix.resource_profile }}" not in text
 
 
 def test_cross_repository_caller_pins_toolkit_checkout_to_its_explicit_immutable_ref():
