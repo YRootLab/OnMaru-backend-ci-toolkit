@@ -1,6 +1,26 @@
 import json
 from pipeline_toolkit.cli import main
 
+
+def write_valid_bundle(tmp_path):
+    source = tmp_path / "facts.json"
+    source.write_text(json.dumps({
+        "title": "CI observation",
+        "observed_at": "2026-09-24",
+        "summary": "Measured the automatic checks before merging code.",
+        "facts": [{
+            "name": "serial CI",
+            "value": 454,
+            "unit": "seconds",
+            "status": "success",
+            "source_url": "https://github.com/example/repo/actions/runs/1",
+            "comparable": True,
+        }],
+        "limitations": ["Three same-commit samples are still needed."],
+        "next_steps": ["Collect comparable samples."],
+    }), encoding="utf-8")
+    return source
+
 def test_cli_version_is_machine_readable(capsys):
     assert main(["version"]) == 0
     assert json.loads(capsys.readouterr().out)["version"] == "0.1.0"
@@ -17,3 +37,49 @@ def test_cli_report_writes_deterministic_markdown(tmp_path):
     source.write_text(json.dumps({"status": "success", "metrics": {"wall_clock_seconds": 2}, "artifacts": []}))
     assert main(["report", "--input", str(source), "--format", "markdown", "--output", str(output)]) == 0
     assert "# Benchmark report" in output.read_text()
+
+
+def test_report_bundle_is_dry_run_by_default(tmp_path, capsys):
+    source = write_valid_bundle(tmp_path)
+
+    assert main([
+        "report-bundle", "--input", str(source), "--slug", "ci", "--repo-root", str(tmp_path),
+    ]) == 0
+
+    assert not (tmp_path / "docs/reports/2026-09-24-ci-detailed.md").exists()
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["dry_run"] is True
+    assert summary["audiences"] == ["developer", "easy"]
+    assert summary["ai_requested"] is False
+    assert summary["planned_paths"] == [
+        "docs/reports/2026-09-24-ci-detailed.md",
+        "docs/reports/easy/2026-09-24-ci-easy.md",
+        "docs/reports/easy/prompts/generated/2026-09-24-ci-easy-prompt.md",
+        "docs/reports/prompts/generated/2026-09-24-ci-detailed-prompt.md",
+    ]
+
+
+def test_report_bundle_requires_write_for_overwrite_and_provider_model_pair(tmp_path):
+    source = write_valid_bundle(tmp_path)
+
+    assert main(["report-bundle", "--input", str(source), "--slug", "ci", "--overwrite"]) == 2
+    assert main(["report-bundle", "--input", str(source), "--slug", "ci", "--ai-provider", "openai"]) == 2
+    assert main(["report-bundle", "--input", str(source), "--slug", "ci", "--model", "gpt-5"]) == 2
+    assert main([
+        "report-bundle", "--input", str(source), "--slug", "ci", "--ai-provider", "openai", "--model", "gpt-5",
+    ]) == 2
+
+
+def test_report_bundle_writes_selected_audience_only(tmp_path, capsys):
+    source = write_valid_bundle(tmp_path)
+
+    assert main([
+        "report-bundle", "--input", str(source), "--slug", "ci", "--audience", "developer",
+        "--repo-root", str(tmp_path), "--write",
+    ]) == 0
+
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["dry_run"] is False
+    assert summary["audiences"] == ["developer"]
+    assert (tmp_path / "docs/reports/2026-09-24-ci-detailed.md").exists()
+    assert not (tmp_path / "docs/reports/easy/2026-09-24-ci-easy.md").exists()
