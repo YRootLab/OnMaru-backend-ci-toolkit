@@ -8,7 +8,7 @@
 
 CI·테스트·CD·benchmark 결과를 기록할 때 개발자용 상세 보고서와 비개발자·포트폴리오용 쉬운 보고서는 같은 사실을 다른 언어로 설명한다. 현재는 두 문서를 각각 작성해야 하므로 수치가 어긋나거나, 실패한 후보 실행이 쉬운 문서에서 성과처럼 표현될 위험이 있다.
 
-`report-bundle`은 관측 사실을 한 번만 구조화해 입력받고 두 결과물을 함께 만든다. 공식 상세판은 toolkit 저장소의 `docs/reports`에, 쉬운판은 저장소 밖 `OnMaru/inbox/reports`에 둔다. 기본 실행은 네트워크 호출과 파일 쓰기를 하지 않으며, AI 완성본은 명시적인 opt-in일 때만 생성한다.
+`report-bundle`은 관측 사실을 한 번만 구조화해 입력받고 두 결과물을 함께 만든다. 공식 상세판은 toolkit 저장소의 `docs/reports`에, 쉬운판은 같은 폴더 안의 `docs/reports/easy`에 둔다. `easy` 경로는 `.gitignore`로 제외하므로 로컬 브랜치에서 확인·수정할 수 있지만 PR에는 포함되지 않는다. 기본 실행은 네트워크 호출과 파일 쓰기를 하지 않으며, AI 완성본은 명시적인 opt-in일 때만 생성한다.
 
 ## 고려한 방식과 선택
 
@@ -81,7 +81,7 @@ flowchart LR
   B --> C[상세 초안·프롬프트]
   B --> D[쉬운 초안·프롬프트]
   C --> E[docs/reports]
-  D --> F[inbox/reports]
+  D --> F[docs/reports/easy]
   C -. 선택적 AI .-> G[상세 완성본]
   D -. 선택적 AI .-> H[쉬운 완성본]
 ```
@@ -100,7 +100,7 @@ AI adapter는 renderer가 만든 prompt packet과 검증된 공통 사실만 전
 
 ### writer
 
-writer는 `--write`가 있을 때만 실행된다. 상세 출력은 저장소 내부 `docs/reports/YYYY-MM-DD-<slug>-detailed.md`와 prompt packet 경로에 쓴다. 쉬운 출력은 구성 가능한 inbox root의 `reports/YYYY-MM-DD-<slug>-easy.md`와 prompt packet 경로에 쓴다. 기본 inbox root는 현재 workspace의 상위 `inbox`이며, `--inbox-root`로 명시적으로 바꿀 수 있다.
+writer는 `--write`가 있을 때만 실행된다. 상세 출력은 저장소 내부 `docs/reports/YYYY-MM-DD-<slug>-detailed.md`와 prompt packet 경로에 쓴다. 쉬운 출력은 `docs/reports/easy/YYYY-MM-DD-<slug>-easy.md`와 prompt packet 경로에 쓴다. `docs/reports/easy/**`는 `.gitignore`로 제외한다. 사용자는 `--easy-output`으로 로컬 출력 경로를 명시적으로 바꿀 수 있지만, 기본값은 저장소 안의 ignored 경로다.
 
 동일 경로가 이미 있으면 기본적으로 실패한다. `--overwrite`는 `--write`와 함께만 허용하며, overwrite 전에 출력 대상이 허용 root 아래에 있는지 다시 검증한다.
 
@@ -110,10 +110,10 @@ writer는 `--write`가 있을 때만 실행된다. 상세 출력은 저장소 �
 | --- | --- | --- | --- |
 | 상세 기술 보고서 | 개발자·운영자 | `docs/reports/` | 코드와 함께 PR·CI·merge |
 | 상세 prompt packet | 개발자·AI 생성 adapter | `docs/reports/prompts/generated/` | 상세 보고서와 같은 PR |
-| 쉬운 보고서 | 비개발자·포트폴리오 독자 | `<inbox-root>/reports/` | 저장소 밖, PR 없음 |
-| 쉬운 prompt packet | 대화형 AI·개인 작성 | `<inbox-root>/reports/prompts/generated/` | 저장소 밖, PR 없음 |
+| 쉬운 보고서 | 비개발자·포트폴리오 독자 | `docs/reports/easy/` | `.gitignore` 처리, PR 없음 |
+| 쉬운 prompt packet | 대화형 AI·개인 작성 | `docs/reports/easy/prompts/generated/` | `.gitignore` 처리, PR 없음 |
 
-AI 생성 결과도 이 경계를 유지한다. AI 모드가 있다고 해서 inbox 결과가 git 상태를 바꾸거나, 상세 결과가 자동으로 push·PR·merge되는 일은 없다.
+AI 생성 결과도 이 경계를 유지한다. AI 모드가 있다고 해서 ignored 쉬운판이 PR에 포함되거나, 상세 결과가 자동으로 push·PR·merge되는 일은 없다.
 
 ## 실패 처리와 안전성
 
@@ -131,7 +131,7 @@ AI 생성 결과도 이 경계를 유지한다. AI 모드가 있다고 해서 in
 ## 테스트 전략
 
 - valid input에서 상세·쉬운 초안과 prompt packet이 결정론적으로 생성되는지 확인한다.
-- `--write` 없이 저장소와 inbox가 바뀌지 않는지 확인한다.
+- `--write` 없이 저장소와 ignored 쉬운 출력이 바뀌지 않는지 확인한다.
 - `--write`가 두 허용 root에만 쓰는지 확인한다.
 - invalid status, 잘못된 URL, path traversal, secret 문자열, 누락 필드를 fail-closed로 검사한다.
 - failed/non-comparable 표본이 improvement 표현이나 delta 계산에 포함되지 않는지 확인한다.
@@ -145,4 +145,4 @@ AI 생성 결과도 이 경계를 유지한다. AI 모드가 있다고 해서 in
 3. `--write`와 명시적 output 경계 없이는 파일이 생성되지 않는다.
 4. AI 모드는 opt-in이며 key/model/provider가 명시돼야 한다.
 5. 실패·비교 불가 표본은 어떠한 출력에서도 성과 수치로 바뀌지 않는다.
-6. 공식 상세 보고서는 PR로, 쉬운 보고서는 inbox로 분리된다.
+6. 공식 상세 보고서는 PR로, 쉬운 보고서는 `docs/reports/easy`의 ignored 로컬 파일로 분리된다.
