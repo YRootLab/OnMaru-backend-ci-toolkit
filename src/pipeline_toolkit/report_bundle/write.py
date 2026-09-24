@@ -42,12 +42,13 @@ def plan_outputs(
         raise ValueError("audience must be developer, easy, or both")
 
     developer_root = resolved_root / "docs/reports"
+    default_easy_root = developer_root / "easy"
     if easy_output is None:
-        easy_root = developer_root / "easy"
+        easy_root = default_easy_root
     else:
         easy_root = easy_output if easy_output.is_absolute() else resolved_root / easy_output
     _require_inside(resolved_root, developer_root)
-    _require_inside(resolved_root, easy_root)
+    _require_inside(default_easy_root, easy_root)
 
     developer_markdown = developer_root / f"{observed_at}-{slug}-detailed.md"
     developer_prompt = developer_root / "prompts/generated" / f"{observed_at}-{slug}-detailed-prompt.md"
@@ -72,6 +73,8 @@ def write_outputs(
     destinations = tuple(contents)
     for destination in destinations:
         _require_inside(plan.root, destination)
+        if destination.resolve() not in _planned_destinations(plan):
+            raise ValueError("report output must be a destination in the output plan")
         if destination.exists() and not overwrite:
             raise FileExistsError(destination)
 
@@ -90,6 +93,19 @@ def _inside(root: Path, candidate: Path) -> bool:
         return os.path.commonpath((str(root.resolve()), str(candidate.resolve()))) == str(root.resolve())
     except ValueError:
         return False
+
+
+def _planned_destinations(plan: OutputPlan) -> frozenset[Path]:
+    return frozenset(
+        destination.resolve()
+        for destination in (
+            plan.developer_markdown,
+            plan.developer_prompt,
+            plan.easy_markdown,
+            plan.easy_prompt,
+        )
+        if destination is not None
+    )
 
 
 def _require_inside(root: Path, candidate: Path) -> None:

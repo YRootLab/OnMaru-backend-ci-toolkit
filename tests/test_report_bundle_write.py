@@ -30,10 +30,14 @@ def test_plan_outputs_rejects_escape_slug_and_easy_output(tmp_path: Path) -> Non
     with pytest.raises(ValueError):
         plan_outputs(tmp_path, "2026-09-24", "ci-observation", "easy", tmp_path / "../escape")
 
+    with pytest.raises(ValueError):
+        plan_outputs(tmp_path, "2026-09-24", "ci-observation", "easy", tmp_path / ".github/workflows")
+
 
 def test_write_outputs_writes_atomically_and_blocks_existing_files(tmp_path: Path) -> None:
-    destination = tmp_path / "docs/reports/result.md"
     plan = plan_outputs(tmp_path, "2026-09-24", "ci-observation", "developer", None)
+    assert plan.developer_markdown is not None
+    destination = plan.developer_markdown
     contents = {destination: "first report\n"}
 
     assert write_outputs(plan, contents, overwrite=False) == (destination,)
@@ -52,3 +56,11 @@ def test_write_outputs_rejects_destination_outside_root(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError):
         write_outputs(plan, {tmp_path.parent / "escape.md": "unsafe\n"}, overwrite=False)
+
+
+def test_write_outputs_rejects_unplanned_repository_files_with_overwrite(tmp_path: Path) -> None:
+    plan = plan_outputs(tmp_path, "2026-09-24", "ci-observation", "developer", None)
+
+    for destination in (tmp_path / ".github/workflows/unrelated.yml", tmp_path / "README.md"):
+        with pytest.raises(ValueError):
+            write_outputs(plan, {destination: "unsafe\n"}, overwrite=True)
