@@ -2,6 +2,14 @@
 
 Lightweight human-readable summary of meaningful repository changes.
 
+## [0.1.2](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/compare/v0.1.1...v0.1.2) (2026-09-25)
+
+
+### Bug Fixes
+
+* **github:** module benchmark output 줄바꿈 수정 ([1bb9110](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/1bb9110a7bd7d7aecfef50c66519e21c119a01e8))
+* **github:** module benchmark output 줄바꿈 수정 ([bb0f74b](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/bb0f74bff18c934bf79cc393e2e7584397f829c6))
+
 ## [0.1.1](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/compare/v0.1.0...v0.1.1) (2026-09-25)
 
 
