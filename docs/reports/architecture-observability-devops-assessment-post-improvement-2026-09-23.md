@@ -1,7 +1,7 @@
 # OnMaru BE Pipeline Toolkit 개선 후 객관적 평가 보고서
 
-작성일: 2026-09-23  
-평가 기준: `develop` 최신 커밋 `c904d7f`  
+작성일: 2026-09-23
+평가 기준: `develop` 최신 커밋 `c904d7f`
 이전 기준 보고서: [`architecture-observability-devops-assessment-2026-09-23.md`](./architecture-observability-devops-assessment-2026-09-23.md)
 
 ## 1. 결론

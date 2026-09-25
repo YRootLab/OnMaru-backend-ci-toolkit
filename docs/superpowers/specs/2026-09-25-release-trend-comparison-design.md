@@ -1,6 +1,6 @@
 # Release trend comparison design
 
-Status: approved by the requester on 2026-09-25.  
+Status: approved by the requester on 2026-09-25.
 Related PRD: `docs/prd/release-trend-comparison.md`
 Tracking: #61
 

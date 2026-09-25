@@ -1,8 +1,8 @@
 # Release Trend Comparison PRD
 
-Status: Proposed  
-Owner: `YRootLab/OnMaru-backend-ci-toolkit`  
-Related: ADR-0002, ADR-0003  
+Status: Proposed
+Owner: `YRootLab/OnMaru-backend-ci-toolkit`
+Related: ADR-0002, ADR-0003
 Tracking: #61 (root), #62 (documentation foundation)
 
 ## 1. Problem and goal

@@ -1,7 +1,7 @@
 # OnMaru Pipeline Toolkit 객관적 진단 보고서
 
-평가일: 2026-09-23  
-대상: `develop`  
+평가일: 2026-09-23
+대상: `develop`
 평가 관점: Backend Architecture, Observability Architecture, Observability Engineering, DevOps Engineering
 
 ## 1. Executive Summary
