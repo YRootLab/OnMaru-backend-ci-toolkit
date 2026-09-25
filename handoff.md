@@ -5,8 +5,9 @@
 - **Related Issue**: #99 (blocks OnMaru-backend #365 rollout)
 - **Scope**: aggregate embedded Python이 `GITHUB_OUTPUT`과 Markdown report에 literal `\\n`을 기록하는 결함을 실제 실행 회귀 테스트로 고친다. workflow topology·권한·artifact 계약은 유지한다.
 - **Plan**: `docs/superpowers/plans/2026-09-26-module-benchmark-output-newlines.md`
-- **Baseline**: focused 4 passed; `bash scripts/verify_toolkit.sh` 160 passed, 91% coverage, workflow security 4 workflows passed.
-- **Next**: RED/GREEN 구현 후 PR을 `develop`에 병합하고 patch release의 immutable target SHA를 OnMaru-backend caller에 반영한다.
+- **Verification**: RED 집중 테스트 1 failed/4 passed (`GITHUB_OUTPUT`이 1줄); GREEN 집중 테스트 5 passed; `bash scripts/verify_toolkit.sh` 161 passed, 91% coverage, workflow security 4 workflows passed; `git diff --check` passed.
+- **Touched files**: `tests/test_module_benchmark_workflow.py`, `.github/workflows/module-benchmark.yml`, `handoff.md`.
+- **Next**: #99 PR을 `develop`에 열어 병합한 뒤 patch release의 immutable target SHA를 OnMaru-backend caller에 반영한다. 현재 작업은 커밋까지만 수행한다.
 
 - **Date**: 2026-09-26 CI Toolkit 학습 시리즈를 stories로 분리
 - **Branch**: `docs/100-move-ci-stories`
