@@ -49,4 +49,3 @@
 - [ ] **Step 5: Commit and open PR**
 
   Commit with `fix(github): module benchmark output 줄바꿈 수정`, push `fix/99-module-output-newlines`, and open a Korean PR into `develop` with `Closes #99` and RED/GREEN evidence.
-
