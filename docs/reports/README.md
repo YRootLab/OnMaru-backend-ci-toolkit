@@ -7,14 +7,6 @@
 - 비개발자·포트폴리오 독자를 위한 쉬운 설명은 `docs/reports/easy/`에 생성한다. 이 경로는 `.gitignore` 처리되어 로컬에서만 확인하며 PR에 포함하지 않는다.
 - 작성에는 [상세 기술 보고서 프롬프트](prompts/detailed-technical-report.md)를 사용한다.
 
-## OnMaru-backend CI Toolkit 학습 시리즈
-
-소스 파일을 모르는 독자도 CI Toolkit의 설계와 rollout을 따라갈 수 있도록, 아래 세 편의 기술 블로그 원고를 함께 제공한다.
-
-- [GitHub Actions·CI·CD·테스트의 실행 원리](2026-09-26-onmaru-ci-series-01-actions-ci-cd-tests.md)
-- [reusable workflow와 두 저장소의 권한 경계](2026-09-26-onmaru-ci-series-02-reusable-workflow-boundary.md)
-- [fan-out/fan-in, shadow check, evidence 기반 rollout](2026-09-26-onmaru-ci-series-03-parallel-rollout-evidence.md)
-
 ## report-bundle 출력 경계
 
 `pipeline-toolkit report-bundle`은 하나의 관측 입력으로 두 독자용 초안과 prompt packet을 계획한다.
