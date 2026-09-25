@@ -1,5 +1,11 @@
 # handoff.md
 
+- **Date**: 2026-09-26 Toolkit consumer adoption guide 시작
+- **Branch**: `docs/82-consumer-adoption-guide`
+- **Related Issue**: #82 (extends #31; coordinates OnMaruBE #390)
+- **Scope**: Toolkit reusable workflow·CLI와 consumer-owned serial baseline 수집/비교의 책임 경계, immutable SHA caller 예시, evidence 보관 원칙을 README에 기록한다. Consumer source, credential, runtime dependency, CI topology는 변경하지 않는다.
+- **Verification**: RED `PYTHONPATH=src python3 -m pytest -q tests/test_readme_adoption.py` (2 failed); GREEN focused 2 passed; `bash scripts/verify_toolkit.sh` (153 passed, 91% coverage, workflow security 4 workflows passed).
+
 - **Date**: 2026-09-25 reusable caller-event guard 수정 시작
 - **Branch**: `fix/80-reusable-caller-event`
 - **Related Issue**: #80
