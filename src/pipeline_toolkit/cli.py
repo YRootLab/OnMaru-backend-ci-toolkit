@@ -22,6 +22,7 @@ from pipeline_toolkit.report_bundle.write import plan_outputs, write_outputs
 from pipeline_toolkit.reports import build_report, render_html, render_job_summary, render_json, render_markdown, render_png
 from pipeline_toolkit.trend.manifest import discover_manifests
 from pipeline_toolkit.trend.service import compare_metric, history_metric
+from pipeline_toolkit.trend.render import render_html as render_trend_html, render_job_summary as render_trend_job_summary, render_json as render_trend_json, render_markdown as render_trend_markdown
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pipeline-toolkit")
@@ -50,7 +51,7 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--history-root", required=True)
         command.add_argument("--candidate", required=True)
         command.add_argument("--metric", required=True)
-        command.add_argument("--format", choices=("json",), default="json")
+        command.add_argument("--format", choices=("json", "markdown", "html", "job-summary"), default="json")
         if name == "compare": command.add_argument("--baseline", required=True)
         else: command.add_argument("--last", type=int, default=10)
     return parser
@@ -98,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
             result = compare_metric(manifests, args.candidate, args.baseline, args.metric) if args.trend_command == "compare" else history_metric(manifests, args.candidate, args.metric, args.last)
         except ValueError as error:
             print(f"trend: {error}", file=sys.stderr); return 2
-        print(json.dumps(result, sort_keys=True)); return 0
+        print(_render_trend(result, args.trend_command, args.format), end=""); return 0
     report = build_report(json.loads(Path(args.input).read_text()))
     rendered = {"json": render_json, "markdown": render_markdown, "html": render_html, "job-summary": render_job_summary, "png": render_png}[args.format](report)
     if args.output:
@@ -183,6 +184,16 @@ def _relative_path(path: Path, root: Path) -> str:
 def _report_bundle_error(message: str) -> int:
     print(f"report-bundle: {message}", file=sys.stderr)
     return 2
+
+
+def _render_trend(result: dict, command: str, output_format: str) -> str:
+    if output_format == "json": return render_trend_json(result)
+    if command == "compare":
+        return {"markdown": render_trend_markdown, "html": render_trend_html, "job-summary": render_trend_job_summary}[output_format](result)
+    markdown = "# Release trend history\n\n" + "\n".join(f"- {item['tag']}: {item['samples']} {item['unit']}" for item in result["observations"]) + "\n"
+    if output_format == "markdown" or output_format == "job-summary": return markdown
+    import html
+    return f"<html><body><pre>{html.escape(markdown)}</pre></body></html>\n"
 
 if __name__ == "__main__":
     raise SystemExit(main())
