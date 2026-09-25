@@ -1,0 +1,2 @@
+scenario,elapsed time (ms),cpu time (ms),max memory (MB)
+assemble,1250,900,256

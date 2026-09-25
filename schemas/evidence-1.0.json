@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://onmaru.dev/schemas/evidence-1.0.json",
+  "title": "Unified evidence record",
+  "type": "object",
+  "required": ["benchmark_id", "unit", "quality", "source", "schema_version"],
+  "properties": {
+    "benchmark_id": {"type": "string", "minLength": 1},
+    "value": {"type": ["number", "null"]},
+    "unit": {"type": "string", "minLength": 1},
+    "quality": {"enum": ["success", "failed", "cancelled", "timeout", "partial", "missing", "invalid", "inconclusive"]},
+    "source": {"type": "string", "minLength": 1},
+    "schema_version": {"const": "1.0"}
+  }
+}

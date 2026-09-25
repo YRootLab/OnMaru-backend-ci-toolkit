@@ -1,0 +1,6 @@
+.coverage
+htmlcov/
+artifacts/
+docs/reports/easy/
+__pycache__/
+*.py[cod]

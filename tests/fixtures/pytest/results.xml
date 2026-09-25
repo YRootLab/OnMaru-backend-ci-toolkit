@@ -1,0 +1,1 @@
+<testsuite name="unit" tests="2" failures="0" skipped="0" time="2.5"><testcase classname="a" name="test_fast" time="0.5" /><testcase classname="a" name="test_slow" time="2.0" /></testsuite>

@@ -1,5 +1,5 @@
 {
-  "repo": "YRootLab/OnMaru-modular-backend-pipeline-toolkit",
+  "repo": "YRootLab/OnMaru-backend-ci-toolkit",
   "root": {
     "title": "Build the release-aware CI/CD benchmark and evidence toolkit",
     "goal": "Implement a reusable toolkit that measures, compares, visualizes, and reports CI/CD performance for OnMaru-backend and similar Spring Boot, Gradle multi-module, and FastAPI repositories, including previous-tag versus current-tag comparisons.",

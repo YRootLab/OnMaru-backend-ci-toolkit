@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["comparison_id","candidate_release","run_ids","status","schema_version"],"properties":{"comparison_id":{"type":"string"},"run_ids":{"type":"array","minItems":1},"status":{"enum":["improved","regressed","unchanged","inconclusive"]},"schema_version":{"const":"1.0"}}}

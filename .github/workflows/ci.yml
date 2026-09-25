@@ -27,5 +27,43 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install pinned CI dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements-ci.txt
+
+      - name: Audit CI dependencies
+        continue-on-error: true
+        run: |
+          mkdir -p artifacts
+          python -m pip_audit -r requirements-ci.txt | tee artifacts/pip-audit.txt
+
+      - name: Upload dependency audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit-${{ github.sha }}
+          path: artifacts/pip-audit.txt
+
       - name: Verify repository
         run: ./scripts/verify_toolkit.sh
+
+      - name: Smoke test report-bundle CLI
+        run: |
+          PYTHONPATH=src python -m pipeline_toolkit.cli report-bundle \
+            --input tests/fixtures/report_bundle/ci-observation.json \
+            --slug ci-smoke \
+            --repo-root . \
+            --audience both \
+            --write
+          test -f docs/reports/2026-09-25-ci-smoke-detailed.md
+          test -f docs/reports/easy/2026-09-25-ci-smoke-easy.md
+          git check-ignore -q docs/reports/easy/2026-09-25-ci-smoke-easy.md
+
+      - name: Upload report-bundle smoke outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-bundle-smoke-${{ github.sha }}
+          path: |
+            docs/reports/2026-09-25-ci-smoke-detailed.md
+            docs/reports/easy/2026-09-25-ci-smoke-easy.md
+          if-no-files-found: error
