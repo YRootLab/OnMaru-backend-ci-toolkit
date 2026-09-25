@@ -1,8 +1,8 @@
 # OnMaruBE 모듈별 병렬 CI·Benchmark Control Plane PRD
 
-상태: Proposed  
+상태: Proposed
 소유: `YRootLab/OnMaru-backend-ci-toolkit`
-Consumer: `YRootLab/OnMaru-backend`  
+Consumer: `YRootLab/OnMaru-backend`
 관련: ADR-0003, OnMaruBE #255
 
 ## 1. 문제와 목표

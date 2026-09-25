@@ -1,5 +1,11 @@
 # handoff.md
 
+- **Date**: 2026-09-26 develop 누적 Toolkit release 준비
+- **Branch**: `release/develop-sync`
+- **Related Issue**: #84
+- **Scope**: 검증된 develop 누적 변경을 release PR로 master에 승격하고, master의 Release Please 및 develop back-merge 상태를 확인한다. release version/tag는 Release Please가 결정한다.
+- **Verification**: release branch에서 `bash scripts/verify_toolkit.sh`, PR `ci`, master push 후 Release Please 상태를 순서대로 확인한다.
+
 - **Date**: 2026-09-26 Toolkit consumer adoption guide 시작
 - **Branch**: `docs/82-consumer-adoption-guide`
 - **Related Issue**: #82 (extends #31; coordinates OnMaruBE #390)
