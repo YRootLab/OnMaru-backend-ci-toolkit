@@ -1,0 +1,29 @@
+{
+  "title": "CI observation smoke fixture",
+  "observed_at": "2026-09-25",
+  "summary": "A safe fixture for report-bundle end-to-end verification.",
+  "facts": [
+    {
+      "name": "serial CI",
+      "value": 402,
+      "unit": "seconds",
+      "status": "success",
+      "source_url": "https://github.com/example/repository/actions/runs/42",
+      "comparable": true
+    },
+    {
+      "name": "parallel candidate",
+      "value": 316.41,
+      "unit": "seconds",
+      "status": "failed",
+      "source_url": "https://github.com/example/repository/actions/runs/43",
+      "comparable": false
+    }
+  ],
+  "limitations": [
+    "The parallel candidate failed and must not be reported as an improvement."
+  ],
+  "next_steps": [
+    "Collect three successful comparable runs."
+  ]
+}

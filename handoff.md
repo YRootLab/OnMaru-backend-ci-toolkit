@@ -1,5 +1,11 @@
 # handoff.md
 
+- **Date**: 2026-09-25 report-bundle E2E and CI smoke
+- **Branch**: `test/59-report-bundle-e2e-smoke`
+- **Related Issue**: #59
+- **Scope**: Add a safe report-facts fixture, end-to-end dual-audience CLI test, and GitHub Actions smoke/artifact verification without an AI call or automatic git mutation.
+- **Verification**: `python3 -m pytest tests/test_cli.py -q` (7 passed); `bash scripts/verify_toolkit.sh` (130 passed, 90% coverage, workflow security passed); manual runner-equivalent smoke with `PYTHONPATH=src`.
+
 - **Date**: 2026-09-24 report bundle design
 - **Branch**: `docs/56-report-bundle-design`
 - **Related Issue**: #56

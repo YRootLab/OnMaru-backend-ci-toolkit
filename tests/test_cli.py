@@ -1,4 +1,6 @@
 import json
+import subprocess
+from pathlib import Path
 from pipeline_toolkit.cli import main
 
 
@@ -83,3 +85,26 @@ def test_report_bundle_writes_selected_audience_only(tmp_path, capsys):
     assert summary["audiences"] == ["developer"]
     assert (tmp_path / "docs/reports/2026-09-24-ci-detailed.md").exists()
     assert not (tmp_path / "docs/reports/easy/2026-09-24-ci-easy.md").exists()
+
+
+def test_report_bundle_end_to_end_writes_both_audiences_and_keeps_easy_ignored(tmp_path, capsys):
+    fixture = Path(__file__).parent / "fixtures/report_bundle/ci-observation.json"
+    source = tmp_path / "facts.json"
+    source.write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+    (tmp_path / ".gitignore").write_text("docs/reports/easy/\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+
+    assert main([
+        "report-bundle", "--input", str(source), "--slug", "ci-smoke", "--repo-root", str(tmp_path),
+        "--audience", "both", "--write",
+    ]) == 0
+
+    summary = json.loads(capsys.readouterr().out)
+    developer = tmp_path / "docs/reports/2026-09-25-ci-smoke-detailed.md"
+    easy = tmp_path / "docs/reports/easy/2026-09-25-ci-smoke-easy.md"
+    assert summary["dry_run"] is False
+    assert developer.exists() and easy.exists()
+    assert "개선 성과로 사용하지 않음" in easy.read_text(encoding="utf-8")
+    assert subprocess.run(
+        ["git", "check-ignore", "-q", str(easy.relative_to(tmp_path))], cwd=tmp_path
+    ).returncode == 0
