@@ -1,5 +1,15 @@
 # handoff.md
 
+- **Date**: 2026-09-26 module benchmark output newline 수정 시작
+- **Branch**: `fix/99-module-output-newlines`
+- **Related Issue**: #99 (blocks OnMaru-backend #365 rollout)
+- **Scope**: aggregate embedded Python이 `GITHUB_OUTPUT`과 Markdown report에 literal `\\n`을 기록하는 결함을 실제 실행 회귀 테스트로 고친다. workflow topology·권한·artifact 계약은 유지한다.
+- **Plan**: `docs/superpowers/plans/2026-09-26-module-benchmark-output-newlines.md`
+- **Verification**: RED 집중 테스트 1 failed/4 passed (`GITHUB_OUTPUT`이 1줄); GREEN 집중 테스트 5 passed; `bash scripts/verify_toolkit.sh` 161 passed, 91% coverage, workflow security 4 workflows passed; `git diff --check` 및 `git diff --check 850dc82bc1a50e1321c406879f5e538d8795aba8 HEAD` passed.
+- **Touched files**: `.github/workflows/module-benchmark.yml`, `tests/test_module_benchmark_workflow.py`, `docs/superpowers/plans/2026-09-26-module-benchmark-output-newlines.md`, `handoff.md`.
+- **Status**: #99 구현과 로컬 검토 완료.
+- **Next**: 브랜치를 push하고 #99 PR을 `develop`에 연다. CI 결과를 확인해 통과한 경우에만 병합한 뒤 patch release와 immutable target SHA를 확인해 OnMaru-backend caller에 반영한다.
+
 - **Date**: 2026-09-26 CI Toolkit 학습 시리즈를 stories로 분리
 - **Branch**: `docs/100-move-ci-stories`
 - **Related Issue**: #100
