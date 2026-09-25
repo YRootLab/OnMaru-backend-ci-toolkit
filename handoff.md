@@ -1,5 +1,12 @@
 # handoff.md
 
+- **Date**: 2026-09-26 Release Please bootstrap failure 수정 시작
+- **Branch**: `fix/87-release-please-bootstrap`
+- **Related Issue**: #87 (unblocks #84)
+- **Root cause**: master Release Please run 36157571570 ran `verify_toolkit.sh` without the Python/coverage dependencies that regular CI installs from `requirements-ci.txt`.
+- **Scope**: release workflow에 CI와 같은 Python bootstrap만 추가하고, setup → install → verify 순서를 contract test로 고정한다.
+- **Verification**: RED `PYTHONPATH=src python3 -m pytest -q tests/test_ci_hardening.py` (1 failed); GREEN focused 3 passed; `bash scripts/verify_toolkit.sh` (154 passed, 91% coverage, workflow security 4 workflows passed).
+
 - **Date**: 2026-09-26 develop 누적 Toolkit release 준비
 - **Branch**: `release/develop-sync`
 - **Related Issue**: #84
