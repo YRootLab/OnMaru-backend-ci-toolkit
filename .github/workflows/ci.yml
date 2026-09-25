@@ -45,3 +45,25 @@ jobs:
 
       - name: Verify repository
         run: ./scripts/verify_toolkit.sh
+
+      - name: Smoke test report-bundle CLI
+        run: |
+          PYTHONPATH=src python -m pipeline_toolkit.cli report-bundle \
+            --input tests/fixtures/report_bundle/ci-observation.json \
+            --slug ci-smoke \
+            --repo-root . \
+            --audience both \
+            --write
+          test -f docs/reports/2026-09-25-ci-smoke-detailed.md
+          test -f docs/reports/easy/2026-09-25-ci-smoke-easy.md
+          git check-ignore -q docs/reports/easy/2026-09-25-ci-smoke-easy.md
+
+      - name: Upload report-bundle smoke outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-bundle-smoke-${{ github.sha }}
+          path: |
+            docs/reports/2026-09-25-ci-smoke-detailed.md
+            docs/reports/easy/2026-09-25-ci-smoke-easy.md
+          if-no-files-found: error
