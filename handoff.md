@@ -1,5 +1,11 @@
 # handoff.md
 
+- **Date**: 2026-09-26 OnMaru-backend 병렬 CI Toolkit rollout 프롬프트 시작
+- **Branch**: `docs/95-parallel-ci-rollout-prompt`
+- **Related Issue**: #95 (coordinates OnMaru-backend #364, #365, #366, #368, #374)
+- **Scope**: consumer 담당자가 최신 develop 기반 대체 PR, shadow rollout, final fan-in, 기준선 비교와 지속 evidence를 안전하게 수행하도록 복사 가능한 한국어 실행 프롬프트를 제공한다.
+- **Verification**: RED `PYTHONPATH=src python3 -m pytest -q tests/test_onmarube_parallel_ci_rollout_prompt.py` (프롬프트 없음으로 2 failed); focused 및 전체 toolkit 검증을 수행한다.
+
 - **Date**: 2026-09-26 OnMaru-backend 병렬 CI/CD·기준선 운영 보고서 시작
 - **Branch**: `docs/93-onmarube-pipeline-report`
 - **Related Issue**: #93 (references OnMaru-backend #364, #365, #366, #368)
