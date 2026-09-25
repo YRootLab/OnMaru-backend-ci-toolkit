@@ -1,5 +1,12 @@
 # handoff.md
 
+- **Date**: 2026-09-25 release trend comparison foundation
+- **Branch**: `docs/release-trend-comparison`
+- **Related Issue**: #62 (root #61)
+- **Scope**: Record the canonical immutable-manifest storage decision, release trend PRD, approved design, implementation plan, and validated six-issue execution graph. The graph opens #63 → #64 → (#65, #66 in parallel) → #67.
+- **Verification**: ADR Toolkit significance score 14/14 (`recommended`); `adr.py validate` checked 4 ADRs with no errors; generated ADR index; work graph validation reported 6 issues with zero errors/warnings; baseline toolkit tests passed (130 tests).
+
+
 - **Date**: 2026-09-25 report-bundle E2E and CI smoke
 - **Branch**: `test/59-report-bundle-e2e-smoke`
 - **Related Issue**: #59
