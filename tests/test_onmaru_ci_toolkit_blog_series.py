@@ -2,9 +2,9 @@ from pathlib import Path
 
 
 SERIES = {
-    "foundations": Path("docs/reports/2026-09-26-onmaru-ci-series-01-actions-ci-cd-tests.md"),
-    "boundary": Path("docs/reports/2026-09-26-onmaru-ci-series-02-reusable-workflow-boundary.md"),
-    "rollout": Path("docs/reports/2026-09-26-onmaru-ci-series-03-parallel-rollout-evidence.md"),
+    "foundations": Path("docs/stories/2026-09-26-onmaru-ci-series-01-actions-ci-cd-tests.md"),
+    "boundary": Path("docs/stories/2026-09-26-onmaru-ci-series-02-reusable-workflow-boundary.md"),
+    "rollout": Path("docs/stories/2026-09-26-onmaru-ci-series-03-parallel-rollout-evidence.md"),
 }
 
 

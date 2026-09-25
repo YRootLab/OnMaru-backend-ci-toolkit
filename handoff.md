@@ -1,5 +1,11 @@
 # handoff.md
 
+- **Date**: 2026-09-26 CI Toolkit 학습 시리즈를 stories로 분리
+- **Branch**: `docs/100-move-ci-stories`
+- **Related Issue**: #100
+- **Scope**: 학습 목적의 3편 blog 원고를 관측 보고서와 구분되는 `docs/stories/`로 옮기고, 양쪽 index와 계약 테스트 경로를 갱신한다.
+- **Verification**: 이동 전 경로를 가리키는 문서 계약은 실패해야 하며, 새 stories 경로와 전체 toolkit 검증을 확인한다.
+
 - **Date**: 2026-09-26 OnMaru-backend CI Toolkit 3편 학습 시리즈 시작
 - **Branch**: `docs/97-onmaru-ci-toolkit-blog-series`
 - **Related Issue**: #97
