@@ -1,5 +1,11 @@
 # handoff.md
 
+- **Date**: 2026-09-26 OnMaru-backend 병렬 CI/CD·기준선 운영 보고서 시작
+- **Branch**: `docs/93-onmarube-pipeline-report`
+- **Related Issue**: #93 (references OnMaru-backend #364, #365, #366, #368)
+- **Scope**: 실제 GitHub Actions 직렬 기준선 표본, 병렬 rollout의 현재·목표 상태, evidence/비교 한계와 운영 책임을 비개발자도 읽을 수 있는 한국어 보고서로 기록한다.
+- **Verification**: RED `PYTHONPATH=src python3 -m pytest -q tests/test_onmarube_pipeline_report.py` (보고서 없음으로 2 failed); 보고서 계약 테스트와 전체 toolkit 검증을 실행한다.
+
 - **Date**: 2026-09-26 Release Please bootstrap failure 수정 시작
 - **Branch**: `fix/87-release-please-bootstrap`
 - **Related Issue**: #87 (unblocks #84)
