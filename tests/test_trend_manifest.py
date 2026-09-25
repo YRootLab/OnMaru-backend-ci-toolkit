@@ -59,10 +59,16 @@ def test_load_manifest_rejects_duplicate_metric_and_non_finite_sample(tmp_path):
 
 def test_discover_manifests_returns_path_sorted_records(tmp_path):
     (tmp_path / "z").mkdir(); (tmp_path / "a").mkdir()
-    write_manifest(tmp_path / "z" / "manifest.json")
+    write_manifest(tmp_path / "z" / "trend-manifest.json")
     second = valid_manifest(); second["release"]["tag"] = "v1.1.0"; second["release"]["commit_sha"] = "c" * 40
-    (tmp_path / "a" / "manifest.json").write_text(json.dumps(second))
+    (tmp_path / "a" / "trend-manifest.json").write_text(json.dumps(second))
     assert [item.release.tag for item in discover_manifests(tmp_path)] == ["v1.1.0", "v1.2.0"]
+
+
+def test_discovery_ignores_unrelated_json_reports(tmp_path):
+    write_manifest(tmp_path / "trend-manifest.json")
+    (tmp_path / "comparison.json").write_text('{"status": "success"}')
+    assert [item.release.tag for item in discover_manifests(tmp_path)] == ["v1.2.0"]
 
 
 def test_failed_manifest_is_visible_but_not_performance_eligible(tmp_path):

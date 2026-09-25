@@ -4,7 +4,9 @@ from pipeline_toolkit.cli import main
 
 
 def _write(root, tag, sha, samples):
-    path = root / f"{tag}.json"
+    directory = root / tag
+    directory.mkdir()
+    path = directory / "trend-manifest.json"
     path.write_text(json.dumps({"schema_version": "1.0", "release": {"repository": "repo", "tag": tag, "commit_sha": sha * 40, "image_digest": "sha256:" + "d" * 64}, "run": {"run_id": tag, "status": "success", "environment": "staging", "suite": "suite", "config_hash": "config", "runner_profile": "runner", "toolkit_version": "0.1", "artifact_uri": "https://example.com/artifact"}, "metrics": [{"id": "pipeline.wall_clock", "unit": "seconds", "samples": samples}]}))
 
 

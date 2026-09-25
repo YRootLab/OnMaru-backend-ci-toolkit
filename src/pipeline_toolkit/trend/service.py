@@ -3,7 +3,7 @@ from __future__ import annotations
 from pipeline_toolkit.compare.statistics import compare_releases
 
 from .model import ReleaseTrendManifest
-from .selector import select_baseline
+from .selector import _version_key, select_baseline
 
 
 def compare_metric(manifests: tuple[ReleaseTrendManifest, ...], candidate_tag: str, baseline: str, metric_id: str) -> dict:
@@ -26,4 +26,5 @@ def history_metric(manifests: tuple[ReleaseTrendManifest, ...], candidate_tag: s
         metric = next((value for value in item.metrics if value.id == metric_id), None)
         if metric is not None and item.performance_eligible and item.run.environment == candidate.run.environment and item.run.suite == candidate.run.suite and item.run.config_hash == candidate.run.config_hash and item.run.runner_profile == candidate.run.runner_profile:
             observations.append({"tag": item.release.tag, "samples": list(metric.samples), "unit": metric.unit})
+    observations.sort(key=lambda item: _version_key(item["tag"]))
     return {"status": "success", "candidate": candidate_tag, "metric": metric_id, "observations": observations[-limit:]}
