@@ -29,7 +29,6 @@ permissions:
 jobs:
   benchmark:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_call' }}
     steps:
       - name: Validate immutable workflow inputs
         env:
