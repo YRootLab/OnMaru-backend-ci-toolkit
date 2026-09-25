@@ -1,5 +1,45 @@
 # handoff.md
 
+- **Date**: 2026-09-26 module benchmark output newline 수정 시작
+- **Branch**: `fix/99-module-output-newlines`
+- **Related Issue**: #99 (blocks OnMaru-backend #365 rollout)
+- **Scope**: aggregate embedded Python이 `GITHUB_OUTPUT`과 Markdown report에 literal `\\n`을 기록하는 결함을 실제 실행 회귀 테스트로 고친다. workflow topology·권한·artifact 계약은 유지한다.
+- **Plan**: `docs/superpowers/plans/2026-09-26-module-benchmark-output-newlines.md`
+- **Verification**: RED 집중 테스트 1 failed/4 passed (`GITHUB_OUTPUT`이 1줄); GREEN 집중 테스트 5 passed; `bash scripts/verify_toolkit.sh` 161 passed, 91% coverage, workflow security 4 workflows passed; `git diff --check` 및 `git diff --check 850dc82bc1a50e1321c406879f5e538d8795aba8 HEAD` passed.
+- **Touched files**: `.github/workflows/module-benchmark.yml`, `tests/test_module_benchmark_workflow.py`, `docs/superpowers/plans/2026-09-26-module-benchmark-output-newlines.md`, `handoff.md`.
+- **Status**: #99 구현과 로컬 검토 완료.
+- **Next**: 브랜치를 push하고 #99 PR을 `develop`에 연다. CI 결과를 확인해 통과한 경우에만 병합한 뒤 patch release와 immutable target SHA를 확인해 OnMaru-backend caller에 반영한다.
+
+- **Date**: 2026-09-26 stories 로컬 전용 정책 전환
+- **Branch**: `chore/103-local-stories`
+- **Related Issue**: #103
+- **Scope**: `docs/stories/`와 그 학습 원고를 Git 추적에서만 제거하고 `.gitignore`로 전환한다. 로컬 story 파일은 삭제하지 않으며 reports와 pipeline 검증은 story 원고에 의존하지 않게 한다.
+- **Verification**: `git check-ignore`로 story 원고가 ignore되는 것을 확인하고, `bash scripts/verify_toolkit.sh`를 실행한다.
+
+- **Date**: 2026-09-26 CI Toolkit 학습 시리즈를 stories로 분리
+- **Branch**: `docs/100-move-ci-stories`
+- **Related Issue**: #100
+- **Scope**: 학습 목적의 3편 blog 원고를 관측 보고서와 구분되는 `docs/stories/`로 옮기고, 양쪽 index와 계약 테스트 경로를 갱신한다.
+- **Verification**: 이동 전 경로를 가리키는 문서 계약은 실패해야 하며, 새 stories 경로와 전체 toolkit 검증을 확인한다.
+
+- **Date**: 2026-09-26 OnMaru-backend CI Toolkit 3편 학습 시리즈 시작
+- **Branch**: `docs/97-onmaru-ci-toolkit-blog-series`
+- **Related Issue**: #97
+- **Scope**: GitHub Actions·CI/CD/test 기초와 runner 실행, reusable workflow·Git SHA·두 저장소 경계, fan-out/fan-in·shadow rollout·evidence/CD 추세를 소스 파일을 모르는 독자도 따라갈 수 있는 한국어 long-form 문서 세 편으로 작성한다.
+- **Verification**: RED `PYTHONPATH=src python3 -m pytest -q tests/test_onmaru_ci_toolkit_blog_series.py` (문서 없음으로 2 failed); 문서 계약과 전체 toolkit 검증을 수행한다.
+
+- **Date**: 2026-09-26 OnMaru-backend 병렬 CI Toolkit rollout 프롬프트 시작
+- **Branch**: `docs/95-parallel-ci-rollout-prompt`
+- **Related Issue**: #95 (coordinates OnMaru-backend #364, #365, #366, #368, #374)
+- **Scope**: consumer 담당자가 최신 develop 기반 대체 PR, shadow rollout, final fan-in, 기준선 비교와 지속 evidence를 안전하게 수행하도록 복사 가능한 한국어 실행 프롬프트를 제공한다.
+- **Verification**: RED `PYTHONPATH=src python3 -m pytest -q tests/test_onmarube_parallel_ci_rollout_prompt.py` (프롬프트 없음으로 2 failed); focused 및 전체 toolkit 검증을 수행한다.
+
+- **Date**: 2026-09-26 OnMaru-backend 병렬 CI/CD·기준선 운영 보고서 시작
+- **Branch**: `docs/93-onmarube-pipeline-report`
+- **Related Issue**: #93 (references OnMaru-backend #364, #365, #366, #368)
+- **Scope**: 실제 GitHub Actions 직렬 기준선 표본, 병렬 rollout의 현재·목표 상태, evidence/비교 한계와 운영 책임을 비개발자도 읽을 수 있는 한국어 보고서로 기록한다.
+- **Verification**: RED `PYTHONPATH=src python3 -m pytest -q tests/test_onmarube_pipeline_report.py` (보고서 없음으로 2 failed); 보고서 계약 테스트와 전체 toolkit 검증을 실행한다.
+
 - **Date**: 2026-09-26 Release Please bootstrap failure 수정 시작
 - **Branch**: `fix/87-release-please-bootstrap`
 - **Related Issue**: #87 (unblocks #84)

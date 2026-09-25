@@ -1,4 +1,8 @@
+import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import yaml
 
@@ -98,3 +102,49 @@ def test_cross_repository_caller_pins_toolkit_checkout_to_its_explicit_immutable
     assert toolkit_checkout["with"]["repository"] == "YRootLab/OnMaru-backend-ci-toolkit"
     assert toolkit_checkout["with"]["ref"] == "${{ inputs.toolkit_ref }}"
     assert "github.workflow_sha" not in text
+
+
+def test_aggregate_script_writes_separate_outputs_and_rendered_report(tmp_path):
+    steps = load_workflow()["jobs"]["aggregate"]["steps"]
+    summary = next(step for step in steps if step.get("id") == "summary")
+    script = summary["run"].split("python - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+
+    evidence = tmp_path / "module-evidence" / "module-evidence-api"
+    evidence.mkdir(parents=True)
+    (evidence / "execution.json").write_text(
+        json.dumps({"module_id": "api", "wall_clock_seconds": 4.5, "exit_code": 0})
+    )
+    (tmp_path / "module-benchmark-report").mkdir()
+    output_path = tmp_path / "github-output"
+    env = os.environ | {
+        "MATRIX_RESULT": "success",
+        "DETECT_RESULT": "success",
+        "MODE": "pr",
+        "BASELINE_REF": "develop",
+        "GITHUB_RUN_ID": "123",
+        "GITHUB_RUN_ATTEMPT": "2",
+        "GITHUB_SERVER_URL": "https://github.com",
+        "GITHUB_REPOSITORY": "YRootLab/OnMaru-backend",
+        "GITHUB_OUTPUT": str(output_path),
+    }
+
+    subprocess.run([sys.executable, "-c", script], cwd=tmp_path, env=env, check=True)
+
+    lines = output_path.read_text().splitlines()
+    assert len(lines) == 5
+    assert dict(line.split("=", 1) for line in lines) == {
+        "result": "inconclusive",
+        "comparison_id": "123-2",
+        "manifest_uri": "https://github.com/YRootLab/OnMaru-backend/actions/runs/123",
+        "report_artifact": "module-benchmark-report",
+        "critical_path_seconds": "4.5",
+    }
+    report = (tmp_path / "module-benchmark-report" / "report.md").read_text()
+    assert "\\n" not in report
+    assert report.splitlines() == [
+        "# Module benchmark",
+        "",
+        "Result: `inconclusive`",
+        "",
+        "Critical path: `4.5` seconds",
+    ]
