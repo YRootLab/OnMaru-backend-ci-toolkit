@@ -4,7 +4,9 @@ from pipeline_toolkit.cli import main
 
 
 def _write(root, tag, sha, *, environment="staging", status="success", samples=(10, 11)):
-    (root / f"{tag}-{environment}.json").write_text(json.dumps({"schema_version": "1.0", "release": {"repository": "repo", "tag": tag, "commit_sha": sha * 40, "image_digest": "sha256:" + "d" * 64}, "run": {"run_id": f"{tag}-{environment}", "status": status, "environment": environment, "suite": "suite", "config_hash": "config", "runner_profile": "runner", "toolkit_version": "0.1", "artifact_uri": "https://example.com/artifact"}, "metrics": [{"id": "pipeline.wall_clock", "unit": "seconds", "samples": samples}]}))
+    directory = root / f"{tag}-{environment}"
+    directory.mkdir()
+    (directory / "trend-manifest.json").write_text(json.dumps({"schema_version": "1.0", "release": {"repository": "repo", "tag": tag, "commit_sha": sha * 40, "image_digest": "sha256:" + "d" * 64}, "run": {"run_id": f"{tag}-{environment}", "status": status, "environment": environment, "suite": "suite", "config_hash": "config", "runner_profile": "runner", "toolkit_version": "0.1", "artifact_uri": "https://example.com/artifact"}, "metrics": [{"id": "pipeline.wall_clock", "unit": "seconds", "samples": samples}]}))
 
 
 def test_release_trend_cli_handles_previous_explicit_incompatible_and_history(tmp_path, capsys):

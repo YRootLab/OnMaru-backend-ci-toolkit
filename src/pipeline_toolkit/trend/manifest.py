@@ -62,4 +62,4 @@ def load_manifest(path: Path) -> ReleaseTrendManifest:
 
 def discover_manifests(history_root: Path) -> tuple[ReleaseTrendManifest, ...]:
     if not history_root.is_dir(): raise ValueError("history_root must be an existing directory")
-    return tuple(load_manifest(path) for path in sorted(history_root.rglob("*.json")) if path.is_file())
+    return tuple(load_manifest(path) for path in sorted(history_root.rglob("trend-manifest.json")) if path.is_file())
