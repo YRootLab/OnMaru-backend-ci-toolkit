@@ -1,5 +1,10 @@
 # handoff.md
 
+- **Date**: 2026-09-25 reusable caller-event guard 수정 시작
+- **Branch**: `fix/80-reusable-caller-event`
+- **Related Issue**: #80
+- **Scope**: caller event와 무관하게 workflow_call 경로의 release trend benchmark가 실행되도록 contract guard를 제거하고 테스트한다.
+
 - **Date**: 2026-09-25 release trend end-to-end validation
 - **Branch**: `test/67-release-trend-e2e`
 - **Related Issue**: #67 (root #61)
