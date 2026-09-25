@@ -1,5 +1,11 @@
 # handoff.md
 
+- **Date**: 2026-09-26 OnMaru-backend CI Toolkit 3편 학습 시리즈 시작
+- **Branch**: `docs/97-onmaru-ci-toolkit-blog-series`
+- **Related Issue**: #97
+- **Scope**: GitHub Actions·CI/CD/test 기초와 runner 실행, reusable workflow·Git SHA·두 저장소 경계, fan-out/fan-in·shadow rollout·evidence/CD 추세를 소스 파일을 모르는 독자도 따라갈 수 있는 한국어 long-form 문서 세 편으로 작성한다.
+- **Verification**: RED `PYTHONPATH=src python3 -m pytest -q tests/test_onmaru_ci_toolkit_blog_series.py` (문서 없음으로 2 failed); 문서 계약과 전체 toolkit 검증을 수행한다.
+
 - **Date**: 2026-09-26 OnMaru-backend 병렬 CI Toolkit rollout 프롬프트 시작
 - **Branch**: `docs/95-parallel-ci-rollout-prompt`
 - **Related Issue**: #95 (coordinates OnMaru-backend #364, #365, #366, #368, #374)
