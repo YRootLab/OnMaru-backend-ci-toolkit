@@ -10,6 +10,12 @@
 - **Status**: #99 구현과 로컬 검토 완료.
 - **Next**: 브랜치를 push하고 #99 PR을 `develop`에 연다. CI 결과를 확인해 통과한 경우에만 병합한 뒤 patch release와 immutable target SHA를 확인해 OnMaru-backend caller에 반영한다.
 
+- **Date**: 2026-09-26 stories 로컬 전용 정책 전환
+- **Branch**: `chore/103-local-stories`
+- **Related Issue**: #103
+- **Scope**: `docs/stories/`와 그 학습 원고를 Git 추적에서만 제거하고 `.gitignore`로 전환한다. 로컬 story 파일은 삭제하지 않으며 reports와 pipeline 검증은 story 원고에 의존하지 않게 한다.
+- **Verification**: `git check-ignore`로 story 원고가 ignore되는 것을 확인하고, `bash scripts/verify_toolkit.sh`를 실행한다.
+
 - **Date**: 2026-09-26 CI Toolkit 학습 시리즈를 stories로 분리
 - **Branch**: `docs/100-move-ci-stories`
 - **Related Issue**: #100
