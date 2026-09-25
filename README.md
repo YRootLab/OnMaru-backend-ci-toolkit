@@ -96,7 +96,7 @@ PYTHONPATH=src python -m pipeline_toolkit.cli trend compare \
 
 ## 상세 계약과 개발 검증을 확인할 수 있습니다
 
-모듈별 병렬 실행의 입력·출력·안전 규칙은 [OnMaruBE parallel CI benchmark PRD](docs/prd/onmarube-parallel-ci-benchmark.md)에, release evidence의 보관·비교 규칙은 [release trend comparison PRD](docs/prd/release-trend-comparison.md)에 정리되어 있습니다.
+모듈별 병렬 실행의 입력·출력·안전 규칙은 [OnMaruBE parallel CI benchmark PRD](docs/prd/onmarube-parallel-ci-benchmark.md)에, release evidence의 보관·비교 규칙은 [release trend comparison PRD](docs/prd/release-trend-comparison.md)에 정리되어 있습니다. OnMaru-backend 담당자가 실제 rollout을 수행할 때는 [병렬 CI Toolkit rollout 구현 프롬프트](docs/to-be/onmaru-backend-parallel-ci-toolkit-rollout-prompt.md)를 사용합니다.
 
 Toolkit 자체를 검증하려면 다음 명령을 실행합니다.
 
