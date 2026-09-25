@@ -1,5 +1,12 @@
 # handoff.md
 
+- **Date**: 2026-09-25 release trend end-to-end validation
+- **Branch**: `test/67-release-trend-e2e`
+- **Related Issue**: #67 (root #61)
+- **Scope**: Verify `previous`, explicit incompatible baseline, failed intermediate evidence, JSON/Markdown/HTML/Job Summary CLI formats, and the read-only reusable workflow convention as one lifecycle.
+- **Verification**: `PYTHONPATH=src python3 -m pytest -q tests/test_trend_e2e.py tests/test_trend_cli.py tests/test_trend_render.py` (4 passed); `bash scripts/verify_toolkit.sh` (148 passed, 91% coverage, workflow security passed).
+
+
 - **Date**: 2026-09-25 release trend comparison foundation
 - **Branch**: `docs/release-trend-comparison`
 - **Related Issue**: #62 (root #61)
