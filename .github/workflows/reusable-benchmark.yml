@@ -9,7 +9,19 @@ on:
       environment: {required: true, type: string}
       suite: {required: true, type: string}
       config-hash: {required: true, type: string}
-      history-root: {required: true, type: string}
+      toolkit-ref:
+        description: Immutable 40-character lowercase toolkit commit SHA supplied by the caller.
+        required: true
+        type: string
+      candidate-artifact-name:
+        description: Caller-workflow artifact containing exactly one trend-manifest.json candidate file.
+        required: true
+        type: string
+      history-release-tags:
+        description: Newline-delimited earlier release tags whose trend-manifest.json Release Assets should be downloaded.
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -19,35 +31,58 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'workflow_call' }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.commit-sha }}
-      - name: Validate immutable release identity
+      - name: Validate immutable workflow inputs
         env:
+          TOOLKIT_REF: ${{ inputs.toolkit-ref }}
           RELEASE_TAG: ${{ inputs.release-tag }}
           COMMIT_SHA: ${{ inputs.commit-sha }}
           IMAGE_DIGEST: ${{ inputs.image-digest }}
-        run: test -n "$RELEASE_TAG" && test -n "$COMMIT_SHA" && test -n "$IMAGE_DIGEST"
-      - name: Install pinned CI dependencies
-        run: python -m pip install --disable-pip-version-check -r requirements-ci.txt
-      - name: Run fixture-safe verification
-        run: bash scripts/verify_toolkit.sh
-      - name: Compare local release history
+        run: |
+          [[ "$TOOLKIT_REF" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$IMAGE_DIGEST" =~ ^sha256: ]]
+          test -n "$RELEASE_TAG"
+      - name: Checkout immutable toolkit implementation
+        uses: actions/checkout@v4
+        with:
+          repository: YRootLab/OnMaru-backend-ci-toolkit
+          ref: ${{ inputs.toolkit-ref }}
+          path: toolkit
+          persist-credentials: false
+      - name: Install pinned toolkit
+        run: python -m pip install --disable-pip-version-check ./toolkit
+      - name: Materialize candidate manifest from caller artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.candidate-artifact-name }}
+          path: .pipeline-history/candidate
+      - name: Validate candidate manifest layout
+        run: test -f .pipeline-history/candidate/trend-manifest.json
+      - name: Materialize prior Release Asset manifests
         env:
-          HISTORY_ROOT: ${{ inputs.history-root }}
+          GH_TOKEN: ${{ github.token }}
+          HISTORY_RELEASE_TAGS: ${{ inputs.history-release-tags }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          mkdir -p .pipeline-history/history artifacts
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            mkdir -p ".pipeline-history/history/$tag"
+            if ! gh release download "$tag" --repo "$REPOSITORY" --pattern trend-manifest.json --dir ".pipeline-history/history/$tag" --clobber; then
+              echo "$tag" >> artifacts/missing-history-release-tags.txt
+            fi
+          done <<< "$HISTORY_RELEASE_TAGS"
+      - name: Compare materialized release history
+        env:
           RELEASE_TAG: ${{ inputs.release-tag }}
         run: |
-          mkdir -p artifacts
-          PYTHONPATH=src python -m pipeline_toolkit.cli trend compare --history-root "$HISTORY_ROOT" --candidate "$RELEASE_TAG" --baseline previous --metric pipeline.wall_clock --format json > artifacts/trend-report.json
-      - name: Publish trend report
+          mkdir -p .pipeline-history/combined
+          cp .pipeline-history/candidate/trend-manifest.json .pipeline-history/combined/trend-manifest.json
+          find .pipeline-history/history -name trend-manifest.json -exec sh -c 'mkdir -p ".pipeline-history/combined/$(dirname "$1" | tr "/" "_")"; cp "$1" ".pipeline-history/combined/$(dirname "$1" | tr "/" "_")/trend-manifest.json"' _ {} \;
+          pipeline-toolkit trend compare --history-root .pipeline-history/combined --candidate "$RELEASE_TAG" --baseline previous --metric pipeline.wall_clock --format json > artifacts/trend-report.json
+      - name: Publish trend evidence
         uses: actions/upload-artifact@v4
         with:
           name: pipeline-toolkit-trend-report
-          path: artifacts/trend-report.json
-      - name: Publish evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: pipeline-toolkit-${{ inputs.release-tag }}
-          path: |
-            schemas
-            tests/fixtures
+          path: artifacts/
+          retention-days: 30
