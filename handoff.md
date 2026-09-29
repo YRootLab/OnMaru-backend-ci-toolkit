@@ -1,5 +1,16 @@
 # handoff.md
 
+## 2026-09-29 Issue #465 Spring API shard benchmark
+
+- **Branch**: `fix/465-spring-api-shard-benchmark`
+- **Related Issue**: [YRootLab/OnMaru-backend#465](https://github.com/YRootLab/OnMaru-backend/issues/465)
+- **Scope**: OnMaru-backend Spring API serial bottleneck을 unit/contract, PostgreSQL catalog, PostgreSQL audio, PostgreSQL other shard로 분리하고 동일 조건의 전후 benchmark·monitoring evidence·시각화 상세 보고서를 작성한다.
+- **Worktrees**: toolkit `.worktrees/issue-465-toolkit`, consumer `/Users/yangseunghyeon/Development/OnMaru/.worktrees/onmaru-backend-465`
+- **Plan**: `docs/superpowers/plans/2026-09-29-spring-api-shard-benchmark.md`
+- **Report contract**: `docs/reports/prompts/detailed-technical-report.md`
+- **Baseline verification**: backend benchmark tests 11 passed; toolkit focused tests 22 passed with `python3` (plain `python` command unavailable).
+- **Measurement rule**: exactly three comparable successful serial samples before and after; failed/cancelled/timeout/missing artifact/identity mismatch is excluded from improvement claims.
+
 - **Date**: 2026-09-27 CI Toolkit 병렬화·benchmark 트러블슈팅 기록
 - **Branch**: `docs/110-ci-troubleshooting`
 - **Related Issue**: #110
