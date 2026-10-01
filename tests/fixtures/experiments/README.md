@@ -1,0 +1,7 @@
+# Fake GitHub experiment boundary
+
+`fake_gh.py` is an executable subprocess fixture with no network access. It logs argv/payload, rejects unknown commands/endpoints, serves authenticated run/artifact metadata, committed application Git tree and original test-plan bytes, and verifies the exact manifest bytes plus fixed attestation signer flags before returning a synthetic successful verification exit status. `attestation_failure` and API `overrides` exercise fail-closed source/scope verification. This does **not** simulate a real Sigstore certificate/transparency log or prove consumer execution isolation.
+
+Every `/2` observation has workflow `commit_sha` independently of `source_identity` (`application_source_commit`, complete root Git tree OID, original committed test-plan SHA-256). Fixtures vary workflow refs but hold application tree/test scope equal. Replay tests preserve separately collected `identity_checks` and `manifest_attestation`; edited replay input is never newly authenticated. Real producer signing/checkout/plan enforcement remains the gated OnMaruBE #556 integration acceptance.
+
+Security tests construct compressed adversarial streams incrementally with a 64 KiB block, never allocate the expanded bomb, and trace decompression peak memory. The POSIX fork fixture records a child heartbeat, exits its leader, retains output pipes and ignores TERM so timeout must escalate KILL; test cleanup kills only its exact child PID if the implementation fails.

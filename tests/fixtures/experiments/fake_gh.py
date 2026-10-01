@@ -2,6 +2,7 @@
 """Strict fake GitHub boundary; never makes a network request."""
 import base64
 import io
+import hashlib
 import json
 import os
 import sys
@@ -25,6 +26,14 @@ if scenario.get("stderr_secret"):
     sys.exit(1)
 if args[:2] == ["auth", "status"]:
     sys.exit(1 if scenario.get("unauthenticated") else 0)
+if args[:2] == ["attestation", "verify"]:
+    assert Path(args[2]).read_bytes() == json.dumps(scenario["manifest"]).encode()
+    assert args[args.index("--repo") + 1] == "YRootLab/OnMaru-backend"
+    assert args[args.index("--signer-workflow") + 1] == "YRootLab/OnMaru-backend/.github/workflows/pipeline-benchmark-experiment.yml"
+    assert args[args.index("--signer-digest") + 1] == scenario["baseline"]
+    assert args[args.index("--source-digest") + 1] == scenario["baseline"]
+    assert "--deny-self-hosted-runners" in args
+    sys.exit(1 if scenario.get("attestation_failure") else 0)
 if not args or args[0] != "api":
     sys.exit("Unexpected fake gh command")
 endpoint = args[1]
@@ -34,6 +43,11 @@ prefix = "repos/" + repo
 overrides = scenario.get("overrides", {})
 if endpoint in overrides:
     response = overrides[endpoint]
+elif endpoint.startswith(prefix + "/git/commits/"):
+    response = {"sha": endpoint.rsplit("/", 1)[1], "tree": {"sha": "d" * 40}}
+elif endpoint.startswith(prefix + "/contents/.github/pipeline-benchmark-test-plan.json?ref="):
+    plan = b'{"scope":"ci","suite":"full-java"}'
+    response = {"type": "file", "encoding": "base64", "content": base64.b64encode(plan).decode(), "sha": hashlib.sha1(b"blob " + str(len(plan)).encode() + b"\0" + plan).hexdigest()}
 elif endpoint == "user":
     response = {"login": "fixture-user"}
 elif endpoint == prefix:

@@ -4,6 +4,7 @@ import copy
 import contextlib
 import io
 import json
+import hashlib
 import os
 import shutil
 import subprocess
@@ -16,8 +17,16 @@ import pytest
 ROOT = Path(__file__).parents[1]
 REPOSITORY = "YRootLab/OnMaru-backend"
 PREFIX = "repos/" + REPOSITORY
-POLICY = "pipeline-experiment/1"
+POLICY = "pipeline-experiment/2"
 BASELINE = "a" * 40
+APP_COMMIT = "c" * 40
+APP_TREE = "d" * 40
+TEST_PLAN = b'{"scope":"ci","suite":"full-java"}'
+TEST_DIGEST = hashlib.sha256(TEST_PLAN).hexdigest()
+
+
+def _source_identity():
+    return {"application_source_commit": APP_COMMIT, "application_source_tree": APP_TREE, "test_plan_sha256": TEST_DIGEST}
 
 
 def _git(root, *args):
@@ -52,6 +61,8 @@ def environment(tmp_path):
             runs[str(run_id)] = _run_record(run_id, commit, f"pipeline-experiment/900/{side}/{index}")
             observations.append({"side": side, "ordinal": index, "run_id": run_id, "run_attempt": 1, "commit_sha": commit, "value": value, "suite": "full-java", "environment_identity": {"runner_image": "ubuntu-24.04", "java_version": "21", "python_version": "3.9", "cache_state": "cold", "database_fixture": "postgres-16", "cpu_memory_profile": "4cpu-16gb", "dependency_mode": "locked", "config_catalog_hash": "sha256:fixture"}, "manifest_url": f"https://github.com/{REPOSITORY}/actions/runs/{run_id}/artifacts/{run_id + 1000}", "grafana_url": "https://fixture.grafana.net/d/ci"})
     manifest = {"version": 1, "policy_version": POLICY, "repository": REPOSITORY, "baseline_ref": BASELINE, "candidate_ref": candidate, "scope": "ci", "experiment_run_id": 900, "experiment_run_attempt": 1, "observations": observations}
+    for item in observations:
+        item["source_identity"] = _source_identity()
     scenario = {"baseline": BASELINE, "candidate": candidate, "parent": _run_record(900, BASELINE, "experiment"), "manifest": manifest, "runs": runs}
     scenario_path = tmp_path / "scenario.json"
     calls = tmp_path / "calls.jsonl"
@@ -96,7 +107,7 @@ def test_dry_run_pins_remote_refs_and_never_dispatches(environment):
     plan = _json(first)
     assert first.stdout == environment["invoke"]().stdout
     assert plan["dry_run"] is True
-    assert plan["policy_version"] == "pipeline-experiment/1"
+    assert plan["policy_version"] == "pipeline-experiment/2"
     assert plan["baseline_ref"] == "a" * 40
     assert plan["candidate_ref"] == environment["scenario"]["candidate"]
     assert plan["dispatch_payload"] == {"ref": "develop", "inputs": {"baseline_ref": BASELINE, "candidate_ref": environment["scenario"]["candidate"], "scope": "ci", "reason": "measure cache"}}
@@ -169,7 +180,7 @@ def test_wait_collects_exact_attempts_and_calls_comparator(environment):
     assert replay["verification"] == "offline_replay"
 
 
-@pytest.mark.parametrize("change,reason", [("two", "sample_count_mismatch"), ("four", "sample_count_mismatch"), ("duplicate", "duplicate_run_id"), ("failed", "run_failure"), ("cancelled", "run_cancelled"), ("attempt", "run_identity_mismatch"), ("sha", "run_identity_mismatch"), ("suite", "comparability_key_mismatch"), ("cache", "comparability_key_mismatch"), ("missing", "run_unavailable"), ("value", "invalid_observation"), ("foreign", "run_identity_mismatch")])
+@pytest.mark.parametrize("change,reason", [("two", "sample_count_mismatch"), ("four", "sample_count_mismatch"), ("duplicate", "duplicate_run_id"), ("failed", "run_failure"), ("cancelled", "run_cancelled"), ("attempt", "run_identity_mismatch"), ("sha", "run_identity_mismatch"), ("suite", "source_identity_unverified"), ("cache", "comparability_key_mismatch"), ("missing", "run_unavailable"), ("value", "invalid_observation"), ("foreign", "run_identity_mismatch")])
 def test_invalid_samples_are_excluded_without_repeated_benchmarks(environment, change, reason):
     receipt = _receipt(environment)
     scenario = environment["scenario"]
@@ -204,7 +215,71 @@ def test_scope_is_fail_closed(environment, scope):
 
 def _collection(environment):
     scenario = environment["scenario"]
-    return {"manifest": copy.deepcopy(scenario["manifest"]), "manifest_url": f"https://github.com/{REPOSITORY}/actions/runs/900/artifacts/500", "runs": {f"{key}:1": copy.deepcopy(value) for key, value in scenario["runs"].items()}, "artifact_checks": {f"{key}:1": "verified" for key in scenario["runs"]}}
+    return {"manifest": copy.deepcopy(scenario["manifest"]), "manifest_url": f"https://github.com/{REPOSITORY}/actions/runs/900/artifacts/500", "runs": {f"{key}:1": copy.deepcopy(value) for key, value in scenario["runs"].items()}, "artifact_checks": {f"{key}:1": "verified" for key in scenario["runs"]}, "manifest_attestation": "verified", "identity_checks": {f"{key}:1": {"status": "verified", **_source_identity()} for key in scenario["runs"]}}
+
+
+@pytest.mark.parametrize("change,reason", [("missing", "source_identity_unavailable"), ("unverified", "source_identity_unverified"), ("forged", "source_identity_unverified"), ("source", "application_source_mismatch"), ("tests", "test_scope_mismatch"), ("attestation", "manifest_attestation_unavailable")])
+def test_source_and_test_scope_must_be_separately_verified(environment, change, reason):
+    from pipeline_toolkit.experiments.compare import compare_collection
+    collection = _collection(environment)
+    item = collection["manifest"]["observations"][-1]
+    if change == "missing": del item["source_identity"]
+    elif change == "unverified": del collection["identity_checks"]["13:1"]
+    elif change == "forged": item["source_identity"]["application_source_tree"] = "e" * 40
+    elif change == "source":
+        item["source_identity"]["application_source_tree"] = "e" * 40
+        collection["identity_checks"]["13:1"]["application_source_tree"] = "e" * 40
+    elif change == "tests":
+        item["source_identity"]["test_plan_sha256"] = "f" * 64
+        collection["identity_checks"]["13:1"]["test_plan_sha256"] = "f" * 64
+    elif change == "attestation": collection["manifest_attestation"] = "unavailable"
+    result = compare_collection(collection)
+    assert result["classification"] == result["verdict"] == "inconclusive"
+    assert result["comparison"]["policy_outcome"] == "none"
+    assert reason in {record["reason"] for record in result["exclusions"]}
+
+
+def test_verified_source_and_scope_survive_replay(environment):
+    from pipeline_toolkit.experiments.compare import compare_collection
+    result = compare_collection(_collection(environment))
+    assert result["collection"]["identity_checks"]["13:1"] == {"status": "verified", **_source_identity()}
+    assert result["observations"][-1]["source_identity"] == _source_identity()
+    assert compare_collection(result["collection"])["comparison"] == result["comparison"]
+
+
+@pytest.mark.parametrize("change,reason", [("attestation", "manifest_attestation_unavailable"), ("tree", "source_identity_unverified"), ("plan", "source_identity_unverified"), ("missing", "source_identity_unavailable")])
+def test_online_collection_rejects_spoofed_source_evidence(environment, change, reason):
+    receipt = _receipt(environment)
+    scenario = environment["scenario"]
+    if change == "attestation": scenario["attestation_failure"] = True
+    elif change == "missing": del scenario["manifest"]["observations"][-1]["source_identity"]
+    elif change == "tree": scenario["overrides"] = {PREFIX + "/git/commits/" + APP_COMMIT: {"sha": APP_COMMIT, "tree": {"sha": "e" * 40}}}
+    elif change == "plan": scenario["overrides"] = {PREFIX + "/contents/.github/pipeline-benchmark-test-plan.json?ref=" + APP_COMMIT: {"type": "file", "encoding": "base64", "content": "e30=", "sha": "f" * 40}}
+    result = _json(environment["invoke"]("wait", "--receipt", str(receipt)))
+    assert result["classification"] == "inconclusive"
+    assert reason in {record["reason"] for record in result["exclusions"]}
+
+
+def test_online_collection_independently_verifies_source_test_plan_and_signer(environment):
+    receipt = _receipt(environment)
+    result = _json(environment["invoke"]("wait", "--receipt", str(receipt)))
+    calls = _calls(environment)
+    assert len([call for call in calls if call["args"][:2] == ["attestation", "verify"]]) == 1
+    assert any(call["args"][1] == PREFIX + "/git/commits/" + APP_COMMIT for call in calls if call["args"][0] == "api")
+    assert result["collection"]["manifest_attestation"] == "verified"
+    assert result["collection"]["identity_checks"]["13:1"] == {"status": "verified", **_source_identity()}
+    assert result["classification"] == "comparable"
+
+
+def test_workflow_refs_can_differ_while_verified_application_tree_is_equal(environment):
+    from pipeline_toolkit.experiments.compare import compare_collection
+    collection = _collection(environment)
+    collection["manifest"]["observations"][-1]["source_identity"]["application_source_commit"] = "e" * 40
+    collection["identity_checks"]["13:1"]["application_source_commit"] = "e" * 40
+    result = compare_collection(collection)
+    assert result["baseline_ref"] != result["candidate_ref"]
+    assert result["classification"] == "comparable"
+    assert result["exclusions"] == []
 
 
 def test_replay_strips_unknown_raw_fields_and_sanitizes_invalid_numbers(environment):

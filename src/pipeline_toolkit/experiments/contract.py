@@ -9,7 +9,9 @@ from urllib.parse import urlparse
 REPOSITORY = "YRootLab/OnMaru-backend"
 WORKFLOW = "pipeline-benchmark-experiment.yml"
 WORKFLOW_PATH = ".github/workflows/" + WORKFLOW
-POLICY_VERSION = "pipeline-experiment/1"
+POLICY_VERSION = "pipeline-experiment/2"
+TEST_PLAN_PATH = ".github/pipeline-benchmark-test-plan.json"
+SOURCE_FIELDS = ("application_source_commit", "application_source_tree", "test_plan_sha256")
 MAX_BYTES = 1024 * 1024
 
 
@@ -22,6 +24,12 @@ class ExperimentError(ValueError):
 def require(condition: bool, code: str) -> None:
     if not condition:
         raise ExperimentError(code)
+
+
+def source_identity(value):
+    require(isinstance(value, dict), "source_identity_unavailable")
+    require(all(isinstance(value.get(key), str) and re.fullmatch(r"[0-9a-f]{40}" if key != "test_plan_sha256" else r"[0-9a-f]{64}", value[key]) for key in SOURCE_FIELDS), "source_identity_unavailable")
+    return {key: value[key] for key in SOURCE_FIELDS}
 
 
 def sha(value) -> str:

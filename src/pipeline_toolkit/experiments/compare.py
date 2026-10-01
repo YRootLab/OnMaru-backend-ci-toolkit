@@ -8,7 +8,7 @@ from dataclasses import replace
 from pipeline_toolkit.compare.module_benchmark import EvaluationTarget, compare_module_benchmarks
 from pipeline_toolkit.contracts.module_evidence import EnvironmentIdentity, ModuleBenchmarkEvidence, ResourceUsage, RunProvenance, validate_module_evidence
 
-from .contract import ExperimentError, POLICY_VERSION, REPOSITORY, WORKFLOW_PATH, positive_id, require, run_url, safe_link, sha, validate_header
+from .contract import ExperimentError, POLICY_VERSION, REPOSITORY, SOURCE_FIELDS, WORKFLOW_PATH, positive_id, require, run_url, safe_link, sha, source_identity, validate_header
 
 
 def validate_run(run, run_id, attempt, commit, title=None, workflow_path=None):
@@ -77,6 +77,8 @@ def _replay_collection(collection):
             copied["grafana_url"] = _link_or_invalid(copied["grafana_url"], grafana=True)
         identity = item.get("environment_identity")
         copied["environment_identity"] = {key: _scalar(identity.get(key)) for key in EnvironmentIdentity.__dataclass_fields__} if isinstance(identity, dict) else None
+        source = item.get("source_identity")
+        copied["source_identity"] = {key: _scalar(source.get(key)) for key in SOURCE_FIELDS} if isinstance(source, dict) else None
         result["observations"].append(copied)
     runs = {}
     for item in result["observations"]:
@@ -88,7 +90,13 @@ def _replay_collection(collection):
             for field in ("repository", "head_repository"):
                 copied[field] = {"full_name": _scalar(run[field].get("full_name"))} if isinstance(run.get(field), dict) else None
         runs[key] = copied
-    return {"manifest": result, "runs": runs, "manifest_url": collection.get("manifest_url"), "artifact_checks": {key: "verified" if collection["artifact_checks"].get(key) == "verified" else "unavailable" for key in runs}}
+    checks = collection.get("identity_checks")
+    checks = checks if isinstance(checks, dict) else {}
+    identities = {}
+    for key in runs:
+        check = checks.get(key)
+        identities[key] = {field: _scalar(check.get(field)) for field in (*SOURCE_FIELDS, "status")} if isinstance(check, dict) else None
+    return {"manifest": result, "runs": runs, "manifest_url": collection.get("manifest_url"), "artifact_checks": {key: "verified" if collection["artifact_checks"].get(key) == "verified" else "unavailable" for key in runs}, "manifest_attestation": "verified" if collection.get("manifest_attestation") == "verified" else "unavailable", "identity_checks": identities}
 
 
 def _links(observations, experiment_id, manifest_url):
@@ -129,6 +137,7 @@ def compare_collection(collection: dict, *, verification="offline_replay") -> di
     accepted = []
     completed_runs = set()
     failed_runs = set()
+    expected_identity = None
     conclusions = ("success", "failure", "cancelled", "timed_out", "skipped", "neutral", "action_required", "stale", "startup_failure")
     ids = Counter(str(item.get("run_id")) for item in observations)
     ordinals = Counter((str(item.get("side")), str(item.get("ordinal"))) for item in observations)
@@ -153,6 +162,14 @@ def compare_collection(collection: dict, *, verification="offline_replay") -> di
             require(ordinals[(item["side"], str(item["ordinal"]))] == 1, "duplicate_ordinal")
             evidence, _, _ = validate_observation(item, manifest)
             require(collection["artifact_checks"].get(f"{run_id}:{attempt}") == "verified", "sample_artifact_unavailable")
+            identity = source_identity(item.get("source_identity"))
+            require(collection["manifest_attestation"] == "verified", "manifest_attestation_unavailable")
+            check = collection["identity_checks"].get(f"{run_id}:{attempt}")
+            require(isinstance(check, dict) and check.get("status") == "verified" and all(check.get(field) == identity[field] for field in SOURCE_FIELDS), "source_identity_unverified")
+            if expected_identity is None:
+                expected_identity = identity
+            require(identity["application_source_tree"] == expected_identity["application_source_tree"], "application_source_mismatch")
+            require(identity["test_plan_sha256"] == expected_identity["test_plan_sha256"], "test_scope_mismatch")
             evidence = replace(evidence, provenance=replace(evidence.provenance, workflow=run["path"]))
             eligible[item["side"]].append(evidence)
             accepted.append(item)
