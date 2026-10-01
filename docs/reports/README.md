@@ -7,6 +7,10 @@
 - 비개발자·포트폴리오 독자를 위한 쉬운 설명은 `docs/reports/easy/`에 생성한다. 이 경로는 `.gitignore` 처리되어 로컬에서만 확인하며 PR에 포함하지 않는다.
 - 작성에는 [상세 기술 보고서 프롬프트](prompts/detailed-technical-report.md)를 사용한다.
 
+## 설계·정책 보고서
+
+- [2026-10-01 CI/CD 벤치마크 관측 체계 최종 보고서](2026-10-01-ci-benchmark-observability-policy.md): OnMaruBE·Toolkit 소유권, 관리형 Prometheus/Grafana/OpenTelemetry 관측, 세 번의 비교 정책과 구현 전 검증 조건.
+
 ## report-bundle 출력 경계
 
 `pipeline-toolkit report-bundle`은 하나의 관측 입력으로 두 독자용 초안과 prompt packet을 계획한다.

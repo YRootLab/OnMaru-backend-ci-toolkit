@@ -1,5 +1,12 @@
 # handoff.md
 
+- **Date**: 2026-10-01 CI benchmark observability policy and ADR
+- **Branch**: `docs/113-ci-observability-policy`
+- **Related Issue**: #113
+- **Scope**: Define consumer-owned CI diagnostics, managed Prometheus/Grafana/OTel telemetry, canonical evidence, three-run comparison policy, and later Gradle-template measurement prerequisites in a final report and ADR.
+- **Verification**: ADR validation 5/5, generated index updated, `bash scripts/verify_toolkit.sh` 160 passed and workflow security 4 passed, JSON syntax and `git diff --check` passed.
+- **Follow-up Issues**: #114 applies the release comparison policy in code; #115 implements CI telemetry. OnMaruBE #525 owns the later Gradle execution/caching evaluation.
+
 - **Date**: 2026-09-27 CI Toolkit 병렬화·benchmark 트러블슈팅 기록
 - **Branch**: `docs/110-ci-troubleshooting`
 - **Related Issue**: #110
