@@ -35,6 +35,8 @@ class ModuleBenchmarkComparison:
     relative_delta: float | None
     valid_baseline_samples: int
     valid_candidate_samples: int
+    baseline_values: tuple[float, ...]
+    candidate_values: tuple[float, ...]
     policy_threshold: float
     required_samples: int
     policy_outcome: str
@@ -51,6 +53,8 @@ class ModuleBenchmarkComparison:
             "candidate_median": self.candidate_median,
             "relative_delta": self.relative_delta,
             "valid_sample_count": {"baseline": self.valid_baseline_samples, "candidate": self.valid_candidate_samples},
+            "sample_values": {"baseline": list(self.baseline_values), "candidate": list(self.candidate_values)},
+            "sample_range": {"baseline": _sample_range(self.baseline_values), "candidate": _sample_range(self.candidate_values)},
             "policy_threshold": self.policy_threshold,
             "required_samples": self.required_samples,
             "policy_outcome": self.policy_outcome,
@@ -81,6 +85,8 @@ def compare_module_benchmarks(baseline: Sequence[ModuleBenchmarkEvidence], candi
     if key is None:
         reason = "comparability_key_mismatch" if valid_baseline and valid_candidate else "no_valid_comparable_samples"
         return _result(ComparisonClassification.INCONCLUSIVE, reason, target, None, valid_baseline, valid_candidate, threshold, required_samples)
+    if _has_duplicate_run_id(valid_baseline) or _has_duplicate_run_id(valid_candidate):
+        return _result(ComparisonClassification.INCONCLUSIVE, "duplicate_run_id", target, key, valid_baseline, valid_candidate, threshold, required_samples)
     if len(valid_baseline) < required_samples or len(valid_candidate) < required_samples:
         return _result(ComparisonClassification.INCONCLUSIVE, "insufficient_valid_comparable_samples", target, key, valid_baseline, valid_candidate, threshold, required_samples)
 
@@ -92,6 +98,7 @@ def compare_module_benchmarks(baseline: Sequence[ModuleBenchmarkEvidence], candi
         comparability_reason="matched_comparability_key", baseline_identity=_baseline_identity(valid_baseline),
         baseline_median=baseline_median, candidate_median=candidate_median, relative_delta=relative_delta,
         valid_baseline_samples=len(valid_baseline), valid_candidate_samples=len(valid_candidate), policy_threshold=threshold,
+        baseline_values=_sample_values(valid_baseline), candidate_values=_sample_values(valid_candidate),
         required_samples=required_samples, policy_outcome=_policy_outcome(target, relative_delta, threshold),
     )
 
@@ -117,8 +124,20 @@ def _all_failed(evidence: Sequence[ModuleBenchmarkEvidence]) -> bool:
     return bool(evidence) and all(item.status in (EvidenceStatus.FAILED, EvidenceStatus.FAILED.value) for item in evidence)
 
 
+def _has_duplicate_run_id(evidence: Sequence[ModuleBenchmarkEvidence]) -> bool:
+    return len({item.run_id for item in evidence}) != len(evidence)
+
+
+def _sample_values(evidence: Sequence[ModuleBenchmarkEvidence]) -> tuple[float, ...]:
+    return tuple(item.metric_value for item in evidence if item.metric_value is not None)
+
+
+def _sample_range(values: tuple[float, ...]) -> float | None:
+    return max(values) - min(values) if values else None
+
+
 def _policy(target: EvaluationTarget) -> tuple[float, int]:
-    return (0.15, 5) if target is EvaluationTarget.RELEASE else (0.10, 1)
+    return (0.15, 3) if target is EvaluationTarget.RELEASE else (0.10, 1)
 
 
 def _policy_outcome(target: EvaluationTarget, relative_delta: float | None, threshold: float) -> str:
@@ -138,5 +157,6 @@ def _result(classification: ComparisonClassification, reason: str, target: Evalu
         comparability_reason="matched_comparability_key" if key else "comparability_key_unavailable",
         baseline_identity=_baseline_identity(baseline), baseline_median=None, candidate_median=None, relative_delta=None,
         valid_baseline_samples=len(baseline), valid_candidate_samples=len(candidate), policy_threshold=threshold,
+        baseline_values=_sample_values(baseline), candidate_values=_sample_values(candidate),
         required_samples=required_samples, policy_outcome="none",
     )

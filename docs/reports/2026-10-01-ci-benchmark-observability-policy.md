@@ -13,7 +13,7 @@ OnMaruBE가 CI 실행·필수 검사·실패 진단의 소유권을 유지하고
 | OnMaruBE의 일반 CI와 module benchmark caller가 별도로 존재한다. | OnMaruBE `.github/workflows/ci.yml`, `.github/workflows/module-benchmark.yml` | 관측 연계 후의 실행 시간과 비용 |
 | Toolkit module workflow는 명령별 `/usr/bin/time` 결과를 artifact로 만들며 최장 명령 시간을 `critical_path_seconds`로 반환한다. | Toolkit `.github/workflows/module-benchmark.yml` | 실제 workflow DAG critical path와 runner 대기 시간 |
 | OnMaruBE는 Grafana Cloud를 서비스 관측 백엔드로 결정했고 Spring API 계측과 Grafana 정의 파일을 갖고 있다. | OnMaruBE ADR-0009, `observability/grafana/` | CI 대시보드의 staging import 및 실제 데이터 표시 |
-| 작업 시작 시 release 비교 문서와 현재 비교 코드는 유효 표본 5회를 요구했다. | 변경 전 ADR-0003·병렬 CI PRD, 현재 `compare/module_benchmark.py` | 새 3회 정책을 코드·consumer에 반영한 실행 결과 |
+| 작업 시작 시 release 비교 문서와 비교 코드는 유효 표본 5회를 요구했다. Toolkit PR #117이 비교 코드를 3회로 변경했다. | 변경 전 ADR-0003·병렬 CI PRD, Toolkit PR #117 | 새 Toolkit SHA를 consumer에 고정한 실행 결과 |
 
 ## 두 저장소와 관측 서비스의 책임
 
@@ -59,9 +59,9 @@ OnMaruBE의 필수 `verify`는 자체 테스트 결과만으로 결정된다. �
 - 개선 실험은 application source와 테스트 범위를 고정하고 workflow/cache 정책만 의도적으로 바꾼다. Release 간 비교는 서로 다른 SHA·image digest를 **각각의 불변 신원**으로 기록하며, 환경·suite·config·runner·cache 조건의 호환성을 검사한다. 서로 다른 release SHA 자체를 불일치 사유로 취급하지 않는다.
 - cold cache와 warm cache를 섞지 않는다. CI 개발자 대기 시간, 전체 runner 작업량, 실패율을 함께 판단한다. 더 짧은 모듈 명령 시간만으로 구조 변경을 채택하지 않는다.
 
-이 3회 정책은 기존 5회 정책을 변경한다. 이 문서 작업은 규범 문서를 맞추지만, 현재 `compare_module_benchmarks` 구현은 아직 release에서 5회를 요구한다. **코드·consumer workflow가 후속 Issue에서 변경·검증되기 전에는 새 3회 판정이 실제 실행에 적용됐다고 표시하지 않는다.**
+이 3회 정책은 기존 5회 정책을 변경한다. [Toolkit PR #117](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/pull/117)이 `compare_module_benchmarks` 코드를 3회 기준으로 변경해 `develop`에 병합됐다. **OnMaruBE가 새 불변 Toolkit SHA를 고정하고 실제 실행을 검증하기 전에는 consumer CI에 새 3회 판정이 적용됐다고 표시하지 않는다.**
 
-후속 구현은 [Toolkit #114 — 3회 release 비교 코드](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/114)에서 추적한다.
+Consumer 적용은 [OnMaruBE #542 — Toolkit SHA 고정과 caller 검증](https://github.com/YRootLab/OnMaru-backend/issues/542)에서 추적한다.
 
 ## 대시보드·부하 시험·보고서
 
