@@ -47,27 +47,71 @@ def test_pr_regression_is_comparable_warning_and_excludes_failed_samples():
     assert len(module_benchmark_comparability_key(baseline[0])) == 14
 
 
-def test_release_hold_requires_five_valid_comparable_samples():
-    baseline = [_evidence(run_id=f"base-{index}", value=100) for index in range(5)]
-    candidate = [_evidence(run_id=f"candidate-{index}", value=116, commit="b" * 40) for index in range(5)]
+def test_pr_still_warns_with_one_valid_run_per_side():
+    result = compare_module_benchmarks(
+        [_evidence(run_id="base", value=100)],
+        [_evidence(run_id="candidate", value=111, commit="b" * 40)],
+        target=EvaluationTarget.PULL_REQUEST,
+    )
+
+    assert result.classification is ComparisonClassification.COMPARABLE
+    assert result.required_samples == 1
+    assert result.policy_outcome == "warning"
+
+
+def test_release_hold_requires_three_valid_comparable_runs_and_reports_spread():
+    baseline = [_evidence(run_id=f"base-{index}", value=value) for index, value in enumerate((99, 100, 101))]
+    candidate = [_evidence(run_id=f"candidate-{index}", value=value, commit="b" * 40) for index, value in enumerate((115, 116, 117))]
 
     result = compare_module_benchmarks(baseline, candidate, target=EvaluationTarget.RELEASE)
 
     assert result.classification is ComparisonClassification.COMPARABLE
     assert result.policy_outcome == "approval_hold"
     assert result.policy_threshold == 0.15
-    assert result.required_samples == 5
+    assert result.required_samples == 3
+    payload = json.loads(render_module_benchmark_json(result))
+    markdown = render_module_benchmark_markdown(result)
+    assert payload["sample_values"] == {"baseline": [99, 100, 101], "candidate": [115, 116, 117]}
+    assert payload["sample_range"] == {"baseline": 2, "candidate": 2}
+    assert "Required samples: `3`" in markdown
+    assert "Baseline samples: `99`, `100`, `101`" in markdown
+    assert "Candidate samples: `115`, `116`, `117`" in markdown
+    assert "Sample range: baseline `2`, candidate `2`" in markdown
 
 
-def test_release_regression_with_fewer_than_five_samples_is_inconclusive_not_held():
+def test_release_regression_with_two_samples_is_inconclusive_not_held():
     result = compare_module_benchmarks(
-        [_evidence(run_id=f"base-{index}", value=100) for index in range(4)],
-        [_evidence(run_id=f"candidate-{index}", value=116, commit="b" * 40) for index in range(4)],
+        [_evidence(run_id=f"base-{index}", value=100) for index in range(2)],
+        [_evidence(run_id=f"candidate-{index}", value=116, commit="b" * 40) for index in range(2)],
         target=EvaluationTarget.RELEASE,
     )
 
     assert result.classification is ComparisonClassification.INCONCLUSIVE
     assert result.reason == "insufficient_valid_comparable_samples"
+    assert result.policy_outcome == "none"
+    assert result.required_samples == 3
+
+
+def test_release_requires_three_distinct_successful_runs_per_side():
+    baseline = [_evidence(run_id=f"base-{index}", value=100) for index in range(3)]
+    candidate = [_evidence(run_id="candidate-0", value=116, commit="b" * 40) for _ in range(3)]
+
+    result = compare_module_benchmarks(baseline, candidate, target=EvaluationTarget.RELEASE)
+
+    assert result.classification is ComparisonClassification.INCONCLUSIVE
+    assert result.reason == "duplicate_run_id"
+    assert result.policy_outcome == "none"
+
+
+def test_release_excludes_failed_sample_before_counting_three_runs():
+    baseline = [_evidence(run_id=f"base-{index}", value=100) for index in range(3)]
+    candidate = [_evidence(run_id=f"candidate-{index}", value=116, commit="b" * 40) for index in range(2)]
+    candidate.append(_evidence(run_id="candidate-2", value=None, commit="b" * 40, status=EvidenceStatus.FAILED))
+
+    result = compare_module_benchmarks(baseline, candidate, target=EvaluationTarget.RELEASE)
+
+    assert result.classification is ComparisonClassification.INCONCLUSIVE
+    assert result.valid_candidate_samples == 2
     assert result.policy_outcome == "none"
 
 

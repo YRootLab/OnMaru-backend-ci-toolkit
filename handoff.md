@@ -1,5 +1,12 @@
 # handoff.md
 
+- **Date**: 2026-10-01 three-run release comparison implementation
+- **Branch**: `fix/114-three-run-release`
+- **Related Issue**: Toolkit #114
+- **Scope**: Align release comparison code and report contract with three distinct valid comparable runs per side; preserve PR warning and 15% release approval review.
+- **Verification**: Baseline `bash scripts/verify_toolkit.sh` passed (160 tests, 4 workflow security checks). RED focused tests failed on the former five-run requirement; GREEN focused tests passed. Final `bash scripts/verify_toolkit.sh` passed (163 tests, 4 workflow security checks); `git diff --check` passed.
+- **Follow-up**: OnMaruBE caller must pin the released Toolkit SHA before the policy is operational in that repository; Toolkit #115 covers telemetry.
+
 - **Date**: 2026-09-27 CI Toolkit 병렬화·benchmark 트러블슈팅 기록
 - **Branch**: `docs/110-ci-troubleshooting`
 - **Related Issue**: #110
