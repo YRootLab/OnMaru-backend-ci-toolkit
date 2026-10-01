@@ -13,7 +13,7 @@ from .model import EvidenceIdentity, MetricPoint, MetricPolicy, SpanRecord, Tele
 
 MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
 MAX_OBSERVATIONS = 8192
-RESULTS = {"cancelled": "cancellation", "timed_out": "timeout", "skipped": "skip", "neutral": "skip", "action_required": "error", "stale": "error"}
+RESULTS = {"failed": "failure", "cancelled": "cancellation", "timed_out": "timeout", "skipped": "skip", "neutral": "skip", "action_required": "error", "stale": "error"}
 TIMESTAMP = re.compile(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d{1,9}))?(Z|[+-]\d\d:\d\d)\Z")
 
 
@@ -87,6 +87,12 @@ def _consistent(evidence):
         duration, complete = module.get("wall_clock_seconds"), module.get("complete")
         if type(complete) is not bool or (duration is not None and (type(duration) not in (int, float) or not 0 <= duration <= 31536000)) or (complete and duration is None):
             raise ValueError("invalid evidence module duration")
+        exit_code = module.get("exit_code")
+        if (exit_code is not None and (type(exit_code) is not int or not 0 <= exit_code <= 255)) or (complete and exit_code is None):
+            raise ValueError("invalid evidence module result")
+        expected_result = "failure" if exit_code not in (None, 0) else "success" if complete else "incomplete"
+        if _outcome(module.get("status")) != expected_result:
+            raise ValueError("inconsistent evidence module result")
     for field in ("quality", "artifact_quality"):
         if not isinstance(evidence.get(field), dict) or evidence[field].get("status") not in QUALITIES or not isinstance(evidence[field].get("issues"), list) or any(not isinstance(issue, str) for issue in evidence[field]["issues"]):
             raise ValueError("invalid evidence collection quality")

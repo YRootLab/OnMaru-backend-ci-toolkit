@@ -217,6 +217,40 @@ def test_diagnostics_show_failure_step_quality_ref_and_safe_source_url():
     assert "Source run: unavailable" in report
 
 
+@pytest.mark.parametrize("url", [
+    "https://github.com/example/backend/actions/runs/42?token=do-not-leak",
+    "https://github.com/example/backend/actions/runs/42?access_token=do-not-leak",
+    "https://github.com/example/backend/actions/runs/42#token=do-not-leak",
+    "https://do-not-leak@github.com/example/backend/actions/runs/42",
+    "https://github.com.example.org/example/backend/actions/runs/42",
+    "https://github.com:444/example/backend/actions/runs/42",
+    "https://github.com/example/backend/actions/runs/42/do-not-leak",
+    "https://github.com/example/backend/actions/runs/42?",
+    "https://github.com/example/backend/actions/runs/42#",
+    "https://github.com/example/backend/actions/runs/42\x00do-not-leak",
+    "https://github.com/example/backend/actions/runs/42\x1f",
+    "https://github.com/example/backend/actions/runs/42\x7f",
+    "https://github.com/example/backend/actions/runs/42\x85",
+    "https://git\thub.com/example/backend/actions/runs/42",
+    "https://github.com/example/backend/actions/runs/42%0ado-not-leak",
+    "https://github.com/example/../actions/runs/42",
+    "https://github.com/example/backend/actions/runs/43",
+])
+def test_diagnostic_source_url_omits_noncanonical_or_credential_bearing_inputs(url):
+    from pipeline_toolkit.reports.diagnostics import render_actions_diagnostics
+    result = evidence([artifact()])
+    result["run"]["html_url"] = url
+    report = render_actions_diagnostics(result)
+    assert "Source run: unavailable" in report
+    assert "do-not-leak" not in report
+
+
+def test_diagnostic_source_url_preserves_the_canonical_github_actions_run():
+    from pipeline_toolkit.reports.diagnostics import render_actions_diagnostics
+    report = render_actions_diagnostics(evidence([artifact()]))
+    assert "Source run: https://github.com/example/backend/actions/runs/42\n" in report
+
+
 @pytest.mark.parametrize("mutation", ["name_object", "name_oversize", "duplicate_step", "bool_attempt", "non_string_time"])
 def test_malformed_api_job_fields_fail_closed(mutation):
     raw = job()

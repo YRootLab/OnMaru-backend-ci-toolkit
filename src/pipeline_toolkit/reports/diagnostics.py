@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import html
-from urllib.parse import urlsplit
+import re
 
 from pipeline_toolkit.security import redact
 
@@ -24,11 +24,9 @@ def render_actions_diagnostics(evidence):
     """
     run, quality = evidence["run"], evidence["quality"]
     url = run.get("html_url")
-    try:
-        parsed = urlsplit(url) if isinstance(url, str) else None
-        safe = parsed is not None and parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password and not any(c.isspace() or c in "<>\\[]()" for c in url)
-    except ValueError:
-        safe = False
+    # Match original characters: URL parsers can strip controls before validation.
+    source = re.fullmatch(r"https://github\.com/([A-Za-z0-9][A-Za-z0-9-]{0,38})/([A-Za-z0-9_.-]{1,100})/actions/runs/([1-9][0-9]*)", url) if isinstance(url, str) else None
+    safe = source is not None and source[2] not in {".", ".."} and source[3] == str(run["id"])
     lines = ["# Actions run diagnostics", "",
              f"Run: {_text(run['id'])}; attempt: {_text(run['attempt'])}; conclusion: {_text(run.get('conclusion'))}",
              f"Source run: {url if safe else 'unavailable'}",

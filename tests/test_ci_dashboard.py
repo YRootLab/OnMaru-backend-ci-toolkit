@@ -192,6 +192,26 @@ def test_live_smoke_uses_real_success_failure_evidence_and_reserved_label_safe_t
         job = next(point for point in bundle.metrics if point.name == "toolkit_ci_job_duration_seconds")
         assert job.labels["ci_job"] == "api"
         assert all(not ({"job", "instance"} & set(point.labels)) for point in bundle.metrics)
+        module_outcome = next(point for point in bundle.metrics if point.name == "toolkit_ci_outcome" and point.labels["scope"] == "module")
+        assert module_outcome.labels["outcome"] == outcome
+        assert module_outcome.values == (1.0,)
+
+
+def test_live_outcome_query_requires_module_failure_labels_not_just_numeric_ones():
+    smoke = smoke_module()
+    validator = getattr(smoke, "validate_outcomes", None)
+    assert callable(validator), "live smoke must verify source outcome labels"
+    records = [{"metric": {"scope": scope, "outcome": outcome}, "value": [1, "1"]}
+               for scope in ("workflow", "module") for outcome in ("success", "failure")]
+    response = {"status": "success", "data": {"result": records}}
+    validator(response)
+    records[-1]["metric"]["outcome"] = "unknown"
+    with pytest.raises(ValueError, match="outcome"):
+        validator(response)
+    records[-1]["metric"]["outcome"] = "failure"
+    records[-1]["value"][1] = "0"
+    with pytest.raises(ValueError, match="outcome"):
+        validator(response)
 
 
 def test_live_smoke_requires_nonempty_query_frames_and_expected_values():

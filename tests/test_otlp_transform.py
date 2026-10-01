@@ -73,6 +73,26 @@ def test_metrics_include_durations_work_outcomes_and_explicit_missing_quality():
     assert not any("critical" in name or "queue_seconds" in name for name in by_name)
 
 
+@pytest.mark.parametrize("exit_code, complete, expected", [(0, True, "success"), (1, True, "failure"), (137, True, "failure"), (255, True, "failure"), (1, False, "failure"), (0, False, "incomplete"), (None, False, "incomplete")])
+def test_module_artifact_exit_code_and_completeness_preserve_exact_outcome(exit_code, complete, expected):
+    raw = json.loads(Path("tests/fixtures/github-actions/attempt-failure.json").read_text())
+    raw["module"].update(exit_code=exit_code, complete=complete)
+    evidence = normalize_actions_timeline(raw["run"], raw["jobs"], toolkit_ref="b" * 40,
+        expected_modules={"api": 701}, module_artifacts=[{"id": 91, "data": json.dumps(raw["module"]).encode()}])
+    bundle = transformed(evidence)
+    point = next(metric for metric in bundle.metrics if metric.name == "toolkit_ci_outcome" and metric.labels["scope"] == "module")
+    assert point.labels["outcome"] == expected and point.values == (1.0,)
+    assert evidence["modules"][0]["exit_code"] == exit_code
+
+
+@pytest.mark.parametrize("status", ["unknown", "success", "incomplete"])
+def test_nonzero_module_exit_cannot_be_resealed_as_a_nonfailure(status):
+    evidence = source()
+    evidence["modules"][0]["status"] = status
+    with pytest.raises(ValueError, match="module result"):
+        transformed(reseal(evidence))
+
+
 def test_identity_is_trace_only_and_replay_key_distinguishes_attempt_and_digest():
     evidence = source()
     first = transformed(evidence)

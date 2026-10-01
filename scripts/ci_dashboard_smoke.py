@@ -55,6 +55,17 @@ def validate_values(response, expected):
         raise ValueError("PromQL source values do not match the fixture")
 
 
+def validate_outcomes(response):
+    """A numeric 1 under unknown must not masquerade as a module failure."""
+    validate_values(response, [1])
+    values = {(item.get("metric", {}).get("scope"), item.get("metric", {}).get("outcome")): float(item["value"][1])
+              for item in response["data"]["result"]}
+    for scope in ("workflow", "module"):
+        for outcome in ("success", "failure"):
+            if values.get((scope, outcome), 0) < 1:
+                raise ValueError("PromQL source outcome labels do not match the fixture")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timeout", type=positive_timeout, default=45)
@@ -97,6 +108,8 @@ def main(argv=None):
                 if item.get("source") == "collector-internal":
                     values = [1] if item["key"] == "collector_scrape_health" else []
                 validate_values(response, values)
+                if item["key"] == "outcome":
+                    validate_outcomes(response)
                 numeric_values[:] = [float(record["value"][1]) for record in response["data"]["result"]]
             else:
                 outcome = "success" if item["key"] == "success_traces" else "failure"
