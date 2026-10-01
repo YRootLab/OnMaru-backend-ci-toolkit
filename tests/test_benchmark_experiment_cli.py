@@ -449,3 +449,89 @@ def test_replay_requires_sample_artifact_verification_snapshot(environment):
     del collection["artifact_checks"]
     with pytest.raises(ExperimentError) as caught: compare_collection(collection)
     assert caught.value.code == "invalid_collection"
+
+
+@pytest.mark.parametrize("suffix", ["\nINJECTED", "\rINJECTED", "\tINJECTED", "\x00", "\x7f", "\u2028INJECTED", "\u200b", "/../INJECTED", "/slug/INJECTED", "%0aINJECTED", "[INJECTED](javascript:alert(1))", "`INJECTED`", "<img src=x>", "\\INJECTED"], ids=["newline", "carriage_return", "tab", "nul", "delete", "unicode_newline", "zero_width", "traversal", "extra_segments", "encoded_newline", "markdown", "backticks", "html", "backslash"])
+def test_grafana_link_rejects_controls_and_dashboard_path_injection(suffix):
+    from pipeline_toolkit.experiments.contract import ExperimentError, safe_link
+    with pytest.raises(ExperimentError) as caught:
+        safe_link("https://fixture.grafana.net/d/ci" + suffix, grafana=True)
+    assert caught.value.code == "invalid_link"
+
+
+@pytest.mark.parametrize("url", ["\nhttps://fixture.grafana.net/d/ci", " https://fixture.grafana.net/d/ci", "https://fixture.grafana.net/d/", "https://fixture.grafana.net/d/..", "https://sub.fixture.grafana.net/d/ci"])
+def test_grafana_link_rejects_noncanonical_tenant_and_dashboard_urls(url):
+    from pipeline_toolkit.experiments.contract import ExperimentError, safe_link
+    with pytest.raises(ExperimentError): safe_link(url, grafana=True)
+
+
+def test_valid_dashboard_url_and_slug_render_as_autolink(environment):
+    from pipeline_toolkit.experiments.compare import compare_collection
+    from pipeline_toolkit.experiments.cli import render_summary
+    collection = _collection(environment)
+    collection["manifest"]["observations"][0]["grafana_url"] = "https://fixture.grafana.net/d/ci_uid/ci-trends"
+    summary = render_summary(compare_collection(collection))
+    assert "- grafana: <https://fixture.grafana.net/d/ci_uid/ci-trends>" in summary
+
+
+def test_report_renderer_does_not_render_raw_link_or_exclusion_injection(environment):
+    from pipeline_toolkit.experiments.compare import compare_collection
+    from pipeline_toolkit.experiments.cli import render_summary
+    result = compare_collection(_collection(environment))
+    result["links"]["grafana"] = ["https://fixture.grafana.net/d/ci\n<img src=x onerror=INJECTED>"]
+    result["exclusions"] = [{"reason": "invalid_observation", "side": "<img src=x onerror=INJECTED>\n```\n[click](javascript:alert(1))"}]
+    summary = render_summary(result)
+    assert "https://fixture.grafana.net/d/ci\n<img" not in summary
+    assert "Exclusions:\n\n```json\n" in summary
+    assert summary.count("\n```\n") == 1
+
+
+@pytest.mark.parametrize("candidate_value", [0, 100])
+def test_zero_baseline_has_explicit_inconclusive_policy(environment, candidate_value):
+    from pipeline_toolkit.experiments.compare import compare_collection
+    collection = _collection(environment)
+    for item in collection["manifest"]["observations"]: item["value"] = 0 if item["side"] == "baseline" else candidate_value
+    result = compare_collection(collection)
+    assert result["classification"] == "inconclusive"
+    assert result["verdict"] == "inconclusive"
+    assert result["comparison"]["reason"] == "zero_baseline"
+    assert result["comparison"]["policy_outcome"] == "none"
+    assert result["comparison"]["relative_delta"] is None
+
+
+@pytest.mark.parametrize("conclusion", ["failure", "cancelled", "timed_out"])
+def test_failure_rate_counts_authenticated_failures_without_measurement(environment, conclusion):
+    from pipeline_toolkit.experiments.compare import compare_collection
+    collection = _collection(environment)
+    collection["runs"]["13:1"]["conclusion"] = conclusion
+    item = collection["manifest"]["observations"][-1]
+    item["value"] = None
+    item["environment_identity"] = None
+    result = compare_collection(collection)
+    assert result["failure_rate"] == pytest.approx(1 / 6)
+    assert result["run_counts"] == {"authenticated_completed": 6, "failed": 1}
+    diagnostic = next(entry for entry in result["exclusions"] if entry["run_id"] == 13)
+    assert diagnostic["reason"] == "run_" + conclusion
+    assert diagnostic["measurement_reason"] == "invalid_observation"
+    assert f"https://github.com/{REPOSITORY}/actions/runs/13" in result["links"]["actions"]
+
+
+def test_failure_rate_deduplicates_authenticated_runs_and_ignores_foreign_failures(environment):
+    from pipeline_toolkit.experiments.compare import compare_collection
+    collection = _collection(environment)
+    collection["runs"]["13:1"]["conclusion"] = "failure"
+    collection["manifest"]["observations"].append(copy.deepcopy(collection["manifest"]["observations"][-1]))
+    assert compare_collection(collection)["failure_rate"] == pytest.approx(1 / 6)
+    collection["runs"]["13:1"]["head_repository"]["full_name"] = "fork/repo"
+    result = compare_collection(collection)
+    assert result["failure_rate"] == 0
+    assert result["run_counts"] == {"authenticated_completed": 5, "failed": 0}
+
+
+def test_wait_counts_failed_run_even_when_sample_value_and_artifact_are_missing(environment):
+    receipt = _receipt(environment)
+    environment["scenario"]["runs"]["13"]["conclusion"] = "failure"
+    environment["scenario"]["manifest"]["observations"][-1]["value"] = None
+    result = _json(environment["invoke"]("wait", "--receipt", str(receipt)))
+    assert result["failure_rate"] == pytest.approx(1 / 6)
+    assert any(item["reason"] == "run_failure" for item in result["exclusions"])

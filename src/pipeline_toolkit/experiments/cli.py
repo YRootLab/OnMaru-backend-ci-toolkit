@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .collect import wait_and_collect
 from .compare import compare_collection
-from .contract import ExperimentError, load_document
+from .contract import ExperimentError, load_document, safe_link
 from .github import GitHub
 from .plan import create_plan, dispatch
 
@@ -55,7 +55,12 @@ def render_summary(result):
     lines = ["# Pipeline benchmark experiment", "", f"Policy: `{result['policy_version']}`", f"Baseline: `{result['baseline_ref']}`", f"Candidate: `{result['candidate_ref']}`", f"Verdict: `{result['verdict']}`", ""]
     for side in ("baseline", "candidate"):
         lines.append(f"{side}: observations {comparison['sample_values'][side]}; median {comparison[side + '_median']}; range {comparison['sample_range'][side]}")
-    lines.extend([f"Absolute delta: {comparison['absolute_delta']}", f"Relative delta: {comparison['relative_delta']}", "", "Exclusions: " + json.dumps(result["exclusions"], sort_keys=True)])
-    for kind, links in result["links"].items():
-        lines.extend(f"- {kind}: {link}" for link in links)
+    lines.extend([f"Absolute delta: {comparison['absolute_delta']}", f"Relative delta: {comparison['relative_delta']}", "", "Exclusions:", "", "```json", json.dumps(result["exclusions"], sort_keys=True), "```", ""])
+    for kind in ("actions", "manifests", "grafana"):
+        for link in result["links"].get(kind, []):
+            try:
+                safe_link(link, grafana=kind == "grafana")
+            except ExperimentError:
+                continue
+            lines.append(f"- {kind}: <{link}>")
     return "\n".join(lines) + "\n"

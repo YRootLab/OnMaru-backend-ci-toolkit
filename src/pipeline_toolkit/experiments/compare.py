@@ -22,11 +22,16 @@ def validate_run(run, run_id, attempt, commit, title=None, workflow_path=None):
         require(run.get("display_title") == title, "run_identity_mismatch")
 
 
-def validate_observation(item, manifest):
+def _observation_identity(item, manifest):
     require(isinstance(item, dict) and item.get("side") in ("baseline", "candidate"), "invalid_observation")
     run_id = positive_id(item.get("run_id")); attempt = positive_id(item.get("run_attempt"))
     require(type(item.get("ordinal")) is int and item["ordinal"] in (1, 2, 3), "invalid_observation")
     require(sha(item.get("commit_sha")) == manifest[item["side"] + "_ref"], "run_identity_mismatch")
+    return run_id, attempt
+
+
+def validate_observation(item, manifest):
+    run_id, attempt = _observation_identity(item, manifest)
     value = item.get("value")
     try:
         require(type(value) in (int, float) and math.isfinite(value) and value >= 0, "invalid_observation")
@@ -122,6 +127,9 @@ def compare_collection(collection: dict, *, verification="offline_replay") -> di
     exclusions = []
     eligible = {"baseline": [], "candidate": []}
     accepted = []
+    completed_runs = set()
+    failed_runs = set()
+    conclusions = ("success", "failure", "cancelled", "timed_out", "skipped", "neutral", "action_required", "stale", "startup_failure")
     ids = Counter(str(item.get("run_id")) for item in observations)
     ordinals = Counter((str(item.get("side")), str(item.get("ordinal"))) for item in observations)
     for side in eligible:
@@ -129,22 +137,37 @@ def compare_collection(collection: dict, *, verification="offline_replay") -> di
             exclusions.append({"side": side, "run_id": None, "run_attempt": None, "reason": "sample_count_mismatch"})
     for item in observations:
         try:
-            evidence, run_id, attempt = validate_observation(item, manifest)
-            require(ids[str(run_id)] == 1 and run_id != experiment_id, "duplicate_run_id")
-            require(ordinals[(item["side"], str(item["ordinal"]))] == 1, "duplicate_ordinal")
+            run_id, attempt = _observation_identity(item, manifest)
             run = runs.get(f"{run_id}:{attempt}")
             validate_run(run, run_id, attempt, item["commit_sha"], f"pipeline-experiment/{experiment_id}/{item['side']}/{item['ordinal']}")
             require(run.get("status") == "completed", "run_incomplete")
             conclusion = run.get("conclusion")
-            require(conclusion == "success", "run_" + (conclusion if conclusion in ("failure", "cancelled", "timed_out", "skipped", "neutral", "action_required", "stale", "startup_failure") else "unknown"))
+            # Execution outcome is authenticated independently of metric and
+            # artifact eligibility. Failed runs commonly have no measurement.
+            if conclusion in conclusions:
+                completed_runs.add((run_id, attempt))
+                if conclusion in ("failure", "cancelled", "timed_out", "startup_failure"):
+                    failed_runs.add((run_id, attempt))
+            require(conclusion == "success", "run_" + (conclusion if conclusion in conclusions else "unknown"))
+            require(ids[str(run_id)] == 1 and run_id != experiment_id, "duplicate_run_id")
+            require(ordinals[(item["side"], str(item["ordinal"]))] == 1, "duplicate_ordinal")
+            evidence, _, _ = validate_observation(item, manifest)
             require(collection["artifact_checks"].get(f"{run_id}:{attempt}") == "verified", "sample_artifact_unavailable")
             evidence = replace(evidence, provenance=replace(evidence.provenance, workflow=run["path"]))
             eligible[item["side"]].append(evidence)
             accepted.append(item)
         except ExperimentError as exc:
-            exclusions.append({"side": item.get("side"), "run_id": item.get("run_id"), "run_attempt": item.get("run_attempt"), "reason": exc.code})
+            diagnostic = {"side": item.get("side"), "run_id": item.get("run_id"), "run_attempt": item.get("run_attempt"), "reason": exc.code}
+            if exc.code in ("run_failure", "run_cancelled", "run_timed_out", "run_startup_failure"):
+                try:
+                    validate_observation(item, manifest)
+                except ExperimentError as measurement_error:
+                    diagnostic["measurement_reason"] = measurement_error.code
+            exclusions.append(diagnostic)
     comparison = compare_module_benchmarks(eligible["baseline"], eligible["candidate"], target=EvaluationTarget.RELEASE).to_dict()
     comparison["absolute_delta"] = comparison["candidate_median"] - comparison["baseline_median"] if comparison["baseline_median"] is not None and comparison["candidate_median"] is not None else None
+    if comparison["baseline_median"] == 0:
+        exclusions.append({"side": None, "run_id": None, "run_attempt": None, "reason": "zero_baseline"})
     if comparison["relative_delta"] is not None and not math.isfinite(comparison["relative_delta"]):
         comparison["relative_delta"] = None
         exclusions.append({"side": None, "run_id": None, "run_attempt": None, "reason": "numerical_overflow"})
@@ -171,7 +194,8 @@ def compare_collection(collection: dict, *, verification="offline_replay") -> di
         "comparison": comparison,
         "observations": accepted,
         "exclusions": exclusions,
-        "failure_rate": sum(item["reason"] in ("run_failure", "run_cancelled", "run_timed_out") for item in exclusions) / len(observations) if observations else None,
+        "failure_rate": len(failed_runs) / len(completed_runs) if completed_runs else None,
+        "run_counts": {"authenticated_completed": len(completed_runs), "failed": len(failed_runs)},
         "links": _links(observations, experiment_id, collection.get("manifest_url")),
         "collection": collection,
         "limitations": [

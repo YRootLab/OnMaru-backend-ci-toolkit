@@ -29,6 +29,8 @@ Wait는 receipt에 기록한 run/attempt를 기다리고 성공 시 artifact를 
 
 `compare_module_benchmarks(..., target=RELEASE)`를 재사용해 15% 초과 중앙값 회귀를 `approval_review`로 표시한다. 이 결과는 검토 자료이며 필수 CI나 자동 배포 gate를 변경하지 않는다. 모든 개별 값, 중앙값, 범위, 상대 delta, 실패율과 제외 사유를 함께 보고한다. 세 표본으로 통계적 유의성을 주장하지 않는다. `comparison.policy_outcome`과 상위 verdict는 제외 증적이 있으면 회귀 승인 요청을 만들지 않는다.
 
+기준선 중앙값이 0이면 상대 변화율을 정의할 수 없으므로 `zero_baseline` 사유의 `inconclusive`로 반환한다. 실패율은 측정값이나 artifact의 유효성과 별개로 신원이 확인된 완료 run/attempt의 실패·취소·timeout·startup failure를 센다. 중복 run/attempt는 한 번만 세고 외부 저장소·알 수 없는 실행은 분모에서도 제외한다. `run_counts.authenticated_completed`와 `run_counts.failed`가 분모와 분자를 명시한다. 실패 run의 값이 없으면 실행 실패 사유와 `measurement_reason`을 함께 남긴다.
+
 결과 JSON의 `collection`을 별도 파일로 저장하면 네트워크 없이 재비교할 수 있다.
 
 ```sh
@@ -83,6 +85,8 @@ Offline 결과는 `verification=offline_replay`로 표시한다. 원본 artifact
 각 sample은 소비자 소유의 별도 `workflow_dispatch` run이고 GitHub API가 `head_sha=commit_sha`를 확인해야 한다. Sample workflow는 오케스트레이터와 다른 파일을 사용할 수 있다. 이름은 run-name을 통해 `pipeline-experiment/<experiment_run_id>/<side>/<ordinal>`로 정확히 기록한다. CLI는 `runs/<run_id>/attempts/<run_attempt>`를 조회하여 완료·success, head repository, SHA, workflow path와 이 상관관계를 검사한다. Baseline과 candidate 모두 같은 sample workflow path를 사용한다. 이 계약은 임의의 성공 CI 실행을 해당 실험의 표본으로 섞는 것을 차단한다. 소비자는 fork source나 특권·관측 secret을 sample job에 전달하지 않아야 한다.
 
 `manifest_url`은 해당 run의 `pipeline-experiment-sample-<attempt>` GitHub artifact URL이다. CLI는 artifact metadata를 조회해 정확한 run/SHA, 이름, 크기와 만료 여부를 확인하고 `collection.artifact_checks`에 replay용 결과를 남긴다. `grafana_url`은 선택 항목이며 credential이나 query를 포함하지 않는 `https://<tenant>.grafana.net/d/<dashboard>`를 사용한다. 관측 전송이 끊기면 null/누락으로 표시하고 원본 benchmark verdict를 유지한다. CLI는 관측 secret을 요구하거나 출력하지 않는다.
+
+Grafana tenant는 한 개의 DNS label이고 dashboard 경로는 `/d/<uid>` 또는 `/d/<uid>/<slug>`다. UID와 slug에는 ASCII 영숫자·밑줄·하이픈만 허용한다. 원본 URL의 공백·제어 문자·Markdown 구문·percent escape·추가 경로는 거부하며 파싱 과정에서 문자를 제거해 허용하지 않는다. Markdown 보고서는 링크를 재검증한 autolink로 출력하고 제외 진단 JSON은 fenced code block으로 표시한다.
 
 ## 상한과 실패 복구
 

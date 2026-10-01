@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -44,6 +45,9 @@ def run_url(run_id: int) -> str:
 
 def safe_link(value, *, artifact_run=None, grafana=False) -> str:
     require(isinstance(value, str) and len(value) <= 2048, "invalid_link")
+    # urlparse strips some leading controls and embedded CR/LF/TAB. Validate
+    # the original string before parsing so it can never become Markdown.
+    require(not any(char.isspace() or unicodedata.category(char).startswith("C") or char in "<>[]()\"'`\\" for char in value), "invalid_link")
     try:
         parsed = urlparse(value)
         port = parsed.port
@@ -54,7 +58,7 @@ def safe_link(value, *, artifact_run=None, grafana=False) -> str:
     if artifact_run is not None:
         require(re.fullmatch(re.escape(run_url(artifact_run)) + r"/artifacts/[1-9][0-9]*", value) is not None, "invalid_link")
     if grafana:
-        require(parsed.hostname.endswith(".grafana.net") and parsed.path.startswith("/d/"), "invalid_link")
+        require(re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.grafana\.net", parsed.hostname) is not None and re.fullmatch(r"/d/[A-Za-z0-9_-]{1,128}(?:/[A-Za-z0-9_-]{1,128})?", parsed.path) is not None, "invalid_link")
     return value
 
 
