@@ -40,7 +40,8 @@ def serialize_event(event: TelemetryEvent) -> str:
 
 
 # CI metrics have their own contract; the existing structured-event API is unchanged.
-CI_LABELS = frozenset({"workflow", "environment", "job", "module", "scope", "outcome", "quality"})
+# Keep data-point labels distinct from Prometheus target/resource/generated labels.
+CI_LABELS = frozenset({"workflow", "environment", "ci_job", "module", "scope", "outcome", "quality"})
 OUTCOMES = frozenset({"success", "failure", "cancellation", "timeout", "skip", "error", "unknown", "incomplete"})
 QUALITIES = frozenset({"available", "unavailable", "complete", "partial", "invalid", "missing"})
 

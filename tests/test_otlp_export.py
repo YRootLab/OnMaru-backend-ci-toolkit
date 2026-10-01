@@ -60,6 +60,19 @@ def test_histogram_keeps_count_sum_and_duration_and_gauges_remain_non_cumulative
     assert sorted(p["asDouble"] for p in work["gauge"]["dataPoints"]) == [6.0, 8.0]
 
 
+def test_serialized_metric_labels_do_not_collide_with_prometheus_target_or_resource_labels():
+    reserved = {"job", "instance", "__name__", "__address__", "le", "quantile", "otel_scope_name", "otel_scope_version", "service_name", "service_namespace", "service_instance_id"}
+    points = all_points(api().build_batches(transformed(), config()))
+    observed_jobs = set()
+    for point in points:
+        labels = {attribute["key"]: attribute["value"]["stringValue"] for attribute in point["attributes"]}
+        assert not reserved.intersection(labels)
+        assert not any(label.startswith("__") for label in labels)
+        if "ci_job" in labels:
+            observed_jobs.add(labels["ci_job"])
+    assert observed_jobs == {"api", "worker"}
+
+
 def test_oversize_item_and_batch_count_abort_before_any_transport(tmp_path):
     exporter = api()
     calls = []

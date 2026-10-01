@@ -96,7 +96,7 @@ def test_untrusted_job_names_never_become_metric_labels_and_undeclared_modules_a
     evidence["jobs"][0]["name"] = "tests/private/account.py " + "d" * 40
     evidence["modules"][0]["module_id"] = "user-secret"
     bundle = api().transform_actions_evidence(reseal(evidence), api().MetricPolicy("ci", "test"), observed_at_ns=1790812810000000000)
-    assert all(m.labels.get("job", "other") == "other" for m in bundle.metrics)
+    assert all(m.labels.get("ci_job", "other") == "other" for m in bundle.metrics)
     assert all(m.labels.get("module", "other") == "other" for m in bundle.metrics)
     assert "user-secret" not in json.dumps([dict(m.labels) for m in bundle.metrics])
 
@@ -106,6 +106,24 @@ def test_typed_metric_rejects_high_cardinality_label_keys(labels):
     telemetry = api()
     with pytest.raises(ValueError, match="label"):
         telemetry.MetricPoint("toolkit_ci_work_seconds", "s", (1.0,), labels, 1, "gauge")
+
+
+@pytest.mark.parametrize("label", ["job", "instance", "__name__", "__address__", "le", "quantile", "otel_scope_name", "otel_scope_version", "service_name", "service_namespace", "service_instance_id"])
+def test_metric_labels_reject_prometheus_target_resource_and_generated_names(label):
+    with pytest.raises(ValueError, match="label"):
+        api().MetricPoint("toolkit_ci_work_seconds", "s", (1.0,), {label: "api"}, 1, "gauge")
+
+
+def test_bounded_job_catalog_uses_ci_job_for_all_job_and_step_metrics_only():
+    bundle = transformed()
+    affected = [metric for metric in bundle.metrics if metric.labels["scope"] in {"job", "step"} and metric.name != "toolkit_ci_work_seconds"]
+    assert affected
+    assert all(metric.labels.get("ci_job") in {"api", "worker"} for metric in affected)
+    assert all("job" not in metric.labels for metric in bundle.metrics)
+    job_span = next(span for span in bundle.spans if span.attributes["toolkit.ci.scope"] == "job")
+    assert job_span.attributes["cicd.pipeline.task.name"] == "module-test (api)"
+    assert job_span.attributes["cicd.pipeline.task.run.id"] == "job:701"
+    assert "ci_job" not in job_span.attributes
 
 
 def test_missing_all_timestamps_emits_no_spans_and_retains_quality_metrics():

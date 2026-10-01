@@ -35,7 +35,9 @@ Trace attributes carry `vcs.repository.name`, `vcs.ref.head.revision` when prese
 
 ## Metrics and label policy
 
-The metric-key allowlist is `workflow`, `environment`, `job`, `module`, `scope`, `outcome`, `quality`. `MetricPolicy` limits workflow/environment identifiers to 64 characters and each explicit job/module catalog to 256 entries. Unmapped jobs/modules use `other`. Step names, arbitrary job names, paths, URLs, repository, run ID, SHA and digest never become metric labels. Catalog configuration must remain stable across runs; the caller supplies it from trusted workflow configuration, not artifact fields. Fixed outcome and quality enums prevent untrusted result strings from creating series.
+The metric-key allowlist is `workflow`, `environment`, `ci_job`, `module`, `scope`, `outcome`, `quality`. `MetricPolicy.jobs` remains the consumer's bounded job catalog; it emits the `ci_job` metric label. `MetricPolicy` limits workflow/environment identifiers to 64 characters and each explicit job/module catalog to 256 entries. Unmapped jobs/modules use `other`. Step names, arbitrary job names, paths, URLs, repository, run ID, SHA and digest never become metric labels. Catalog configuration must remain stable across runs; the caller supplies it from trusted workflow configuration, not artifact fields. Fixed outcome and quality enums prevent untrusted result strings from creating series.
+
+CI data-point labels must not use Prometheus target labels `job`/`instance`, internal `__*` names, generated histogram/summary labels `le`/`quantile`, scope labels `otel_scope_name`/`otel_scope_version`, or translated resource labels such as `service_name`, `service_namespace`, `service_instance_id`. The model rejects these names and the serialized-payload regression checks every point. Real #119 integration exposed the old `job` label colliding with the Collector Prometheus exporter's constant label, dropping job/step metrics despite OTLP success; the contract therefore uses `ci_job` with no `job` alias. Trace task attributes and names are unchanged.
 
 | Metric | Unit/type | Source and missing-data behavior |
 | --- | --- | --- |
@@ -50,6 +52,19 @@ The metric-key allowlist is `workflow`, `environment`, `job`, `module`, `scope`,
 Multiple samples in the same label set form one histogram point. Histograms preserve count, sum, min and max with a single catch-all bucket; v1 does not support bucket-derived quantiles. Outcome/quality gauges count observations in this manifest and must not be interpreted as lifetime totals. Consumers must retain the manifest when individual samples matter.
 
 Metric timestamps use the observed window's source completion when available. Histogram start time uses the observed window's source start. With no valid job window, metric observation time is the supplied persisted `observed_at_ns`; histogram start remains absent. Reuse this timestamp during replay. Changing it for an otherwise identical all-untimed manifest changes the payload plan and is rejected by the replay store. Unavailable workflow wall-clock, queue and DAG critical path never receive a numeric metric.
+
+### Prometheus query contract for #121
+
+Use `ci_job` for CI job selection/grouping; `job` and `instance` belong to the scrape/export target. For a currently retained sample, these selectors retrieve API job/step histogram sums and the failed-job observation:
+
+```promql
+toolkit_ci_job_duration_seconds_sum{workflow="ci", environment="test", ci_job="api"}
+toolkit_ci_step_duration_seconds_sum{workflow="ci", environment="test", ci_job="api"}
+toolkit_ci_outcome{workflow="ci", environment="test", scope="job", outcome="failure", ci_job="api"}
+toolkit_ci_collection_quality{workflow="ci", environment="test", scope="job", ci_job="api"}
+```
+
+Dashboard job variables should discover `ci_job` values from job metrics, and grouped panels should use `by (workflow, environment, ci_job)`. Do not rename Prometheus target `job` into a CI job. Queries based on the old CI `job` label must migrate. The changed metric bytes also change replay plans: existing identities already checkpointed under the old payload will return `replay_plan_mismatch`; use a newly collected run/attempt for verification or an explicitly reviewed replay-state migration. An OTLP acknowledgement alone is not proof that a Prometheus series was retained.
 
 ## Reconstructed traces
 

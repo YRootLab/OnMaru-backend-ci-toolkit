@@ -197,22 +197,22 @@ def transform_actions_evidence(evidence: dict, policy: MetricPolicy, *, observed
     for job in sorted(evidence["jobs"], key=lambda job: job["id"]):
         key, interval = "job:" + str(job["id"]), intervals[job["id"]]
         job_label = policy.jobs.get(job["id"], "other")
-        outcome(job.get("conclusion"), "job", job=job_label)
-        metric("toolkit_ci_collection_quality", 1, "job", kind="gauge", quality=job["duration_quality"], job=job_label)
+        outcome(job.get("conclusion"), "job", ci_job=job_label)
+        metric("toolkit_ci_collection_quality", 1, "job", kind="gauge", quality=job["duration_quality"], ci_job=job_label)
         if interval:
             span(key, span_id("workflow") if window else None, job.get("name") or "job", interval, job.get("conclusion"), "job")
-            metric("toolkit_ci_job_duration_seconds", job["duration_seconds"], "job", job=job_label)
+            metric("toolkit_ci_job_duration_seconds", job["duration_seconds"], "job", ci_job=job_label)
         else:
             issues.append(key + ":timestamp_" + (job["duration_quality"] if job["duration_quality"] != "available" else "invalid"))
         for step in sorted(job["steps"], key=lambda step: step["number"]):
             step_key = "step:" + str(job["id"]) + ":" + str(step["number"])
             step_interval = _interval(step)
-            outcome(step.get("conclusion"), "step", job=job_label)
-            metric("toolkit_ci_collection_quality", 1, "step", kind="gauge", quality=step["duration_quality"], job=job_label)
+            outcome(step.get("conclusion"), "step", ci_job=job_label)
+            metric("toolkit_ci_collection_quality", 1, "step", kind="gauge", quality=step["duration_quality"], ci_job=job_label)
             if step_interval:
                 # Missing parents are not invented; an observed step can be a root.
                 span(step_key, span_id(key) if interval else None, step.get("name") or "step", step_interval, step.get("conclusion"), "step")
-                metric("toolkit_ci_step_duration_seconds", step["duration_seconds"], "step", job=job_label)
+                metric("toolkit_ci_step_duration_seconds", step["duration_seconds"], "step", ci_job=job_label)
             else:
                 issues.append(step_key + ":timestamp_" + (step["duration_quality"] if step["duration_quality"] != "available" else "invalid"))
     if complete:
