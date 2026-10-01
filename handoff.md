@@ -4,6 +4,8 @@ Updated: 2026-10-01
 
 ## Current work
 
+- Implementation ready for review: [Toolkit #118](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/118), branch `feature/118-actions-evidence`, isolated worktree `.worktrees/issue-118-actions-evidence`. Attempt-specific pagination, bounded versioned module joins/digests, deterministic identity, duplicate quarantine and consumer-local diagnostics are implemented with test-first coverage. The producer emits attempt identity; legacy critical-path output is declared but empty and module maximum uses `longest_module_duration_seconds`. Workflow wall-clock and DAG critical path remain unavailable.
+- #118 verification: focused suite 48 tests; full `bash scripts/verify_toolkit.sh` 205 tests, 92% coverage and 4 workflow security checks on Python 3.9.6. Read-only OnMaruBE run `36822854010`, attempt 1: 19 jobs, 110 steps, complete timing quality, 712s observed window. No consumer raw responses committed. Consumer migration must stop coercing deprecated `critical_path_seconds` to a number and enforce ZIP/download/member bounds before passing JSON bytes; [contract](docs/telemetry/actions-timeline.md) documents the boundary. No push, merge, Issue closure or consumer changes performed.
 - Issue: [Toolkit #115](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/115)
 - Branch: `feature/115-ci-telemetry` from `origin/develop` (`f3d5f4c`)
 - Scope: P0 Actions run/job/step evidence and consumer-local diagnostics, P1 bounded OTLP/Prometheus/Grafana observability, and the P3 on-demand benchmark workflow/CLI/Agent Skill contract.

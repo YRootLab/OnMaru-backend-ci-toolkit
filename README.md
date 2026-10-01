@@ -41,7 +41,7 @@ Toolkit은 consumer의 **런타임 의존성**이 아닙니다. Toolkit workflow
 
 OnMaru-backend는 `.github/benchmark-modules.yml`에 모듈별 경로와 테스트 명령을 기록합니다. 예를 들어 catalog 모듈의 파일만 바뀌면 catalog와 그 결과에 의존하는 모듈을 우선 실행할 수 있습니다. 공통 Gradle 설정이나 workflow 파일이 바뀌었거나 어떤 모듈인지 판단할 수 없으면, 안전을 위해 전체 suite를 실행합니다.
 
-Toolkit의 `module-plan`은 이 목록과 변경 경로를 읽어 실행 계획을 만들고, `module-benchmark.yml`은 계획을 matrix로 나눕니다. 서로 독립적인 모듈은 동시에 실행하고, resource-heavy 작업은 동시성 한도를 지켜 runner가 과부하되지 않게 합니다. 마지막 aggregate 단계는 각 결과를 한 곳에 모아 critical path와 실패 상태를 계산하고, verify 단계는 branch protection이 읽을 수 있는 하나의 결론을 남깁니다.
+Toolkit의 `module-plan`은 이 목록과 변경 경로를 읽어 실행 계획을 만들고, `module-benchmark.yml`은 계획을 matrix로 나눕니다. 서로 독립적인 모듈은 동시에 실행하고, resource-heavy 작업은 동시성 한도를 지켜 runner가 과부하되지 않게 합니다. 마지막 aggregate 단계는 각 결과를 한 곳에 모아 최장 module 명령 시간과 실패 상태를 기록하고, verify 단계는 branch protection이 읽을 수 있는 하나의 결론을 남깁니다. dependency graph를 확인하지 않은 workflow DAG critical path는 `unavailable`로 남깁니다.
 
 실패한 테스트나 artifact 누락은 성능 저하라는 뜻이 아닙니다. 이런 경우 결과는 `failed` 또는 `inconclusive`로 남기며, 성능이 나빠졌다고 단정하지 않습니다. 이 구분이 없으면 테스트 인프라 문제를 코드 성능 문제로 잘못 해석할 수 있습니다.
 
@@ -62,7 +62,7 @@ jobs:
       comment_mode: summary
 ```
 
-`catalog_path`와 모든 `test_command`는 OnMaru-backend가 소유합니다. Toolkit은 caller runner에서 그 명령을 실행해 `module-benchmark-report` artifact와 result, comparison ID, critical path output을 caller에 돌려줍니다. 모듈을 새로 추가할 때는 서비스에 Toolkit 코드를 import하는 대신 catalog에 한 항목을 추가하고 테스트 명령을 검증하면 됩니다. rollout 중에는 기존 `verify`를 required check로 유지하고, module benchmark의 artifact와 result가 충분히 쌓인 뒤 branch rule에 연결합니다.
+`catalog_path`와 모든 `test_command`는 OnMaru-backend가 소유합니다. Toolkit은 caller runner에서 그 명령을 실행해 `module-benchmark-report` artifact와 result, comparison ID, `longest_module_duration_seconds`, `dag_critical_path_quality` output을 caller에 돌려줍니다. 기존 `critical_path_seconds`는 deprecated output으로 빈 값을 반환하므로, 숫자로 읽던 consumer는 [Actions evidence 계약](docs/telemetry/actions-timeline.md)에 따라 전환해야 합니다. 모듈을 새로 추가할 때는 서비스에 Toolkit 코드를 import하는 대신 catalog에 한 항목을 추가하고 테스트 명령을 검증하면 됩니다. rollout 중에는 기존 `verify`를 required check로 유지하고, module benchmark의 artifact와 result가 충분히 쌓인 뒤 branch rule에 연결합니다.
 
 ## 기준선은 같은 출발선에서 반복해 만듭니다
 

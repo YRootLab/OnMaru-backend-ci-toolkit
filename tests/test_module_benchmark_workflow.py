@@ -40,6 +40,8 @@ def test_reusable_module_benchmark_declares_prd_workflow_call_contract():
         "manifest_uri",
         "report_artifact",
         "critical_path_seconds",
+        "longest_module_duration_seconds",
+        "dag_critical_path_quality",
     }
 
 
@@ -60,6 +62,8 @@ def test_workflow_preserves_detect_matrix_aggregate_verify_fan_in_contract():
         "manifest_uri",
         "report_artifact",
         "critical_path_seconds",
+        "longest_module_duration_seconds",
+        "dag_critical_path_quality",
     }
 
 
@@ -140,18 +144,21 @@ def test_aggregate_script_writes_separate_outputs_and_rendered_report(tmp_path):
         "GITHUB_SERVER_URL": "https://github.com",
         "GITHUB_REPOSITORY": "YRootLab/OnMaru-backend",
         "GITHUB_OUTPUT": str(output_path),
+        "WORKFLOW_STARTED_AT": "2026-10-01T00:00:00Z",
     }
 
     subprocess.run([sys.executable, "-c", script], cwd=tmp_path, env=env, check=True)
 
     lines = output_path.read_text().splitlines()
-    assert len(lines) == 5
+    assert len(lines) == 7
     assert dict(line.split("=", 1) for line in lines) == {
         "result": "inconclusive",
         "comparison_id": "123-2",
         "manifest_uri": "https://github.com/YRootLab/OnMaru-backend/actions/runs/123",
         "report_artifact": "module-benchmark-report",
-        "critical_path_seconds": "4.5",
+        "critical_path_seconds": "",
+        "longest_module_duration_seconds": "4.5",
+        "dag_critical_path_quality": "unavailable",
     }
     report = (tmp_path / "module-benchmark-report" / "report.md").read_text()
     assert "\\n" not in report
@@ -161,7 +168,8 @@ def test_aggregate_script_writes_separate_outputs_and_rendered_report(tmp_path):
         "Result: `inconclusive`",
         "",
         "Workflow wall-clock: `unavailable` seconds",
-        "Critical path: `4.5` seconds",
+        "Longest module duration: `4.5` seconds",
+        "DAG critical path: `unavailable`",
         "Sum of module work: `4.5` seconds",
         "Resource evidence: `unavailable`",
         "",
@@ -169,6 +177,12 @@ def test_aggregate_script_writes_separate_outputs_and_rendered_report(tmp_path):
         "| --- | ---: | ---: |",
         "| api | 4.5 | 0 |",
     ]
+    manifest = json.loads((tmp_path / "module-benchmark-report" / "manifest.json").read_text())
+    assert manifest["critical_path_seconds"] is None
+    assert manifest["dag_critical_path_quality"] == "unavailable"
+    assert manifest["longest_module_duration_seconds"] == 4.5
+    assert manifest["workflow_wall_clock_seconds"] is None
+    assert manifest["workflow_wall_clock_quality"] == "unavailable"
 
 
 def test_aggregate_report_exposes_wall_clock_work_and_monitoring_fields():
@@ -179,3 +193,49 @@ def test_aggregate_report_exposes_wall_clock_work_and_monitoring_fields():
     assert '"resource_evidence"' in text
     assert "| Module | Wall-clock (s) | Exit |" in text
     assert "Workflow wall-clock" in text
+
+
+def test_module_producer_emits_versioned_attempt_evidence_joinable_by_explicit_job_mapping(tmp_path):
+    import hashlib
+    from pipeline_toolkit.telemetry.timeline import normalize_actions_timeline
+    step = next(step for step in load_workflow()["jobs"]["module-test"]["steps"] if step.get("id") == "test")
+    script = step["run"].split("python - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    root = tmp_path / ".module-benchmark" / "api"
+    root.mkdir(parents=True)
+    (root / "time.txt").write_text("Elapsed (wall clock) time (h:mm:ss or m:ss): 0:06.00\n")
+    env = os.environ | {"MODULE_ID": "api", "TEST_COMMAND": "echo harmless", "MODULE_EXIT_STATUS": "1",
+                        "MODULE_STARTED_AT": "2026-10-01T00:00:02Z", "MODULE_ENDED_AT": "2026-10-01T00:00:08Z",
+                        "GITHUB_RUN_ID": "42", "GITHUB_RUN_ATTEMPT": "2", "TOOLKIT_REF": "b" * 40}
+    subprocess.run([sys.executable, "-c", script], cwd=tmp_path, env=env, check=True)
+    payload = (root / "execution.json").read_bytes()
+    produced = json.loads(payload)
+    assert produced["schema_version"] == 1
+    assert produced["run_id"] == 42
+    assert produced["run_attempt"] == 2
+    assert produced["toolkit_ref"] == "b" * 40
+    timeline = normalize_actions_timeline(
+        {"id": 42, "run_attempt": 2}, {"total_count": 1, "jobs": [{"id": 701, "steps": []}]},
+        toolkit_ref="b" * 40, expected_modules={"api": 701},
+        module_artifacts=[{"id": 91, "data": payload, "digest": "sha256:" + hashlib.sha256(payload).hexdigest()}])
+    assert timeline["artifact_quality"]["status"] == "complete"
+    assert timeline["modules"][0]["job_id"] == 701
+    assert timeline["modules"][0]["status"] == "failed"
+    assert "command" not in timeline["modules"][0]
+
+
+def test_aggregate_does_not_replace_unknown_module_duration_with_zero(tmp_path):
+    summary = next(step for step in load_workflow()["jobs"]["aggregate"]["steps"] if step.get("id") == "summary")
+    script = summary["run"].split("python - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    evidence = tmp_path / "module-evidence" / "module-evidence-api"
+    evidence.mkdir(parents=True)
+    (evidence / "execution.json").write_text(json.dumps({"module_id": "api", "wall_clock_seconds": None, "exit_code": 1}))
+    (tmp_path / "module-benchmark-report").mkdir()
+    env = os.environ | {"MATRIX_RESULT": "failure", "DETECT_RESULT": "success", "MODE": "pr", "BASELINE_REF": "develop",
+                        "GITHUB_RUN_ID": "42", "GITHUB_RUN_ATTEMPT": "2", "GITHUB_SERVER_URL": "https://github.com",
+                        "GITHUB_REPOSITORY": "example/backend", "GITHUB_OUTPUT": str(tmp_path / "github-output")}
+    subprocess.run([sys.executable, "-c", script], cwd=tmp_path, env=env, check=True)
+    manifest = json.loads((tmp_path / "module-benchmark-report/manifest.json").read_text())
+    assert manifest["longest_module_duration_seconds"] is None
+    assert manifest["longest_module_duration_quality"] == "unavailable"
+    assert manifest["sum_work_quality"] == "partial"
+    assert "Longest module duration: `unavailable`" in (tmp_path / "module-benchmark-report/report.md").read_text()

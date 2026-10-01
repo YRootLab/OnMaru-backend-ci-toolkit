@@ -116,7 +116,9 @@ workflow outputs:
 | `comparison_id` | baseline/candidate comparison 식별자 |
 | `manifest_uri` | evidence manifest artifact URI |
 | `report_artifact` | report artifact 이름 |
-| `critical_path_seconds` | 분석된 critical path |
+| `longest_module_duration_seconds` | 관측된 최장 module 명령 시간; workflow DAG critical path와 구분 |
+| `dag_critical_path_quality` | dependency graph 미확인 시 `unavailable` |
+| `critical_path_seconds` | deprecated 호환 output; 현재 빈 값, manifest는 `null` |
 
 Workflow는 `detect → matrix test → aggregate → verify fan-in` 구조다. matrix는 `fail-fast: false`여야 하며, 최종 `verify` job은 기존 branch ruleset의 required check 이름을 유지한다.
 

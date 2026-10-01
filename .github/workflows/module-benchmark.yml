@@ -45,8 +45,14 @@ on:
         description: GitHub Artifact name containing the aggregate report.
         value: ${{ jobs.verify.outputs.report_artifact }}
       critical_path_seconds:
-        description: Longest observed module execution duration in this run.
+        description: Deprecated; empty because the workflow DAG critical path is unavailable.
         value: ${{ jobs.verify.outputs.critical_path_seconds }}
+      longest_module_duration_seconds:
+        description: Longest observed module command duration in seconds; not workflow DAG critical path.
+        value: ${{ jobs.verify.outputs.longest_module_duration_seconds }}
+      dag_critical_path_quality:
+        description: Availability of a verified workflow DAG critical path.
+        value: ${{ jobs.verify.outputs.dag_critical_path_quality }}
 
 permissions:
   contents: read
@@ -130,6 +136,7 @@ jobs:
         env:
           MODULE_ID: ${{ matrix.id }}
           TEST_COMMAND: ${{ matrix.test_command }}
+          TOOLKIT_REF: ${{ inputs.toolkit_ref }}
         run: |
           mkdir -p ".module-benchmark/$MODULE_ID"
           started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -159,6 +166,11 @@ jobs:
               if "System time (seconds)" in line: system_seconds = float(line.split(":", 1)[1].strip())
               if "Maximum resident set size (kbytes)" in line: max_rss_bytes = int(line.split(":", 1)[1].strip()) * 1024
           (root / "execution.json").write_text(json.dumps({
+              "schema_version": 1,
+              "run_id": int(os.environ["GITHUB_RUN_ID"]),
+              "run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "toolkit_ref": os.environ["TOOLKIT_REF"],
+              "complete": elapsed is not None,
               "module_id": module_id,
               "command": os.environ["TEST_COMMAND"],
               "exit_code": int(os.environ["MODULE_EXIT_STATUS"]),
@@ -192,6 +204,8 @@ jobs:
       manifest_uri: ${{ steps.summary.outputs.manifest_uri }}
       report_artifact: ${{ steps.summary.outputs.report_artifact }}
       critical_path_seconds: ${{ steps.summary.outputs.critical_path_seconds }}
+      longest_module_duration_seconds: ${{ steps.summary.outputs.longest_module_duration_seconds }}
+      dag_critical_path_quality: ${{ steps.summary.outputs.dag_critical_path_quality }}
     steps:
       - name: Download module evidence
         if: ${{ always() }}
@@ -207,7 +221,6 @@ jobs:
           DETECT_RESULT: ${{ needs.detect.result }}
           MODE: ${{ inputs.mode }}
           BASELINE_REF: ${{ inputs.baseline_ref }}
-          WORKFLOW_STARTED_AT: ${{ github.run_started_at }}
         run: |
           mkdir -p module-benchmark-report
           python - <<'PY'
@@ -219,14 +232,17 @@ jobs:
               executions.append(json.loads(path.read_text()))
           failed = os.environ["MATRIX_RESULT"] not in {"success", "skipped"} or os.environ["DETECT_RESULT"] != "success"
           result = "failed" if failed else "inconclusive"
-          critical_path = max((record.get("wall_clock_seconds") or 0 for record in executions), default=0)
-          sum_work = sum((record.get("wall_clock_seconds") or 0 for record in executions))
+          import math
+          durations = [record["wall_clock_seconds"] for record in executions
+                       if type(record.get("wall_clock_seconds")) in (int, float)
+                       and 0 <= record["wall_clock_seconds"] <= 31536000
+                       and math.isfinite(record["wall_clock_seconds"])
+                       and record.get("complete", True) is True]
+          longest_module_duration = max(durations, default=None)
+          duration_quality = "available" if executions and len(durations) == len(executions) else "partial" if durations else "unavailable"
+          sum_work = sum(durations)
           resource_evidence = "available" if executions and all(record.get("resource_evidence") == "available" for record in executions) else "unavailable"
           workflow_wall_clock = None
-          if os.environ.get("WORKFLOW_STARTED_AT"):
-              from datetime import datetime, timezone
-              workflow_started = datetime.fromisoformat(os.environ["WORKFLOW_STARTED_AT"].replace("Z", "+00:00"))
-              workflow_wall_clock = round((datetime.now(timezone.utc) - workflow_started).total_seconds(), 3)
           comparison_id = f"{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
           manifest_uri = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
           manifest = {
@@ -235,9 +251,14 @@ jobs:
               "baseline_ref": os.environ["BASELINE_REF"],
               "result": result,
               "executions": executions,
-              "critical_path_seconds": critical_path,
+              "critical_path_seconds": None,
+              "dag_critical_path_quality": "unavailable",
+              "longest_module_duration_seconds": longest_module_duration,
+              "longest_module_duration_quality": duration_quality,
               "sum_work_seconds": sum_work,
+              "sum_work_quality": "complete" if len(durations) == len(executions) else "partial",
               "workflow_wall_clock_seconds": workflow_wall_clock,
+              "workflow_wall_clock_quality": "unavailable",
               "resource_evidence": resource_evidence,
               "manifest_uri": manifest_uri,
           }
@@ -245,7 +266,8 @@ jobs:
           report = [
               "# Module benchmark", "", f"Result: `{result}`", "",
               f"Workflow wall-clock: `{workflow_wall_clock if workflow_wall_clock is not None else 'unavailable'}` seconds",
-              f"Critical path: `{critical_path}` seconds", f"Sum of module work: `{sum_work}` seconds",
+              f"Longest module duration: `{longest_module_duration if longest_module_duration is not None else 'unavailable'}` seconds",
+              "DAG critical path: `unavailable`", f"Sum of module work: `{sum_work}` seconds",
               f"Resource evidence: `{resource_evidence}`", "", "| Module | Wall-clock (s) | Exit |", "| --- | ---: | ---: |",
           ]
           report.extend(f"| {record.get('module_id', 'unknown')} | {record.get('wall_clock_seconds', 'unavailable')} | {record.get('exit_code', 'unavailable')} |" for record in executions)
@@ -253,7 +275,9 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               output.write(f"result={result}\ncomparison_id={comparison_id}\n")
               output.write(f"manifest_uri={manifest_uri}\nreport_artifact=module-benchmark-report\n")
-              output.write(f"critical_path_seconds={critical_path}\n")
+              output.write("critical_path_seconds=\n")
+              output.write(f"longest_module_duration_seconds={longest_module_duration if longest_module_duration is not None else ''}\n")
+              output.write("dag_critical_path_quality=unavailable\n")
           PY
       - name: Publish aggregate evidence and report
         if: ${{ always() }}
@@ -276,6 +300,8 @@ jobs:
       manifest_uri: ${{ needs.aggregate.outputs.manifest_uri }}
       report_artifact: ${{ needs.aggregate.outputs.report_artifact }}
       critical_path_seconds: ${{ needs.aggregate.outputs.critical_path_seconds }}
+      longest_module_duration_seconds: ${{ needs.aggregate.outputs.longest_module_duration_seconds }}
+      dag_critical_path_quality: ${{ needs.aggregate.outputs.dag_critical_path_quality }}
     steps:
       - name: Enforce required fan-in result
         env:
