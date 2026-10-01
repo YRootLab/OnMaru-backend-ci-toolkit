@@ -1,0 +1,5 @@
+# Static probe for the upstream distroless runtime; no shell/package manager.
+FROM busybox:1.37.0-musl AS probe
+# Upstream publishes this release with architecture-specific tags.
+FROM otel/opentelemetry-collector-contrib:0.162.0-${TARGETARCH}
+COPY --from=probe /bin/busybox /busybox

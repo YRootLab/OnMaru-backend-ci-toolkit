@@ -1,0 +1,3 @@
+FROM busybox:1.37.0-musl AS probe
+FROM grafana/tempo:2.10.8
+COPY --from=probe /bin/busybox /busybox
