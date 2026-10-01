@@ -160,5 +160,22 @@ def test_aggregate_script_writes_separate_outputs_and_rendered_report(tmp_path):
         "",
         "Result: `inconclusive`",
         "",
+        "Workflow wall-clock: `unavailable` seconds",
         "Critical path: `4.5` seconds",
+        "Sum of module work: `4.5` seconds",
+        "Resource evidence: `unavailable`",
+        "",
+        "| Module | Wall-clock (s) | Exit |",
+        "| --- | ---: | ---: |",
+        "| api | 4.5 | 0 |",
     ]
+
+
+def test_aggregate_report_exposes_wall_clock_work_and_monitoring_fields():
+    text = WORKFLOW.read_text()
+
+    assert '"workflow_wall_clock_seconds"' in text
+    assert '"sum_work_seconds"' in text
+    assert '"resource_evidence"' in text
+    assert "| Module | Wall-clock (s) | Exit |" in text
+    assert "Workflow wall-clock" in text

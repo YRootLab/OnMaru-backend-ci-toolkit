@@ -132,10 +132,14 @@ jobs:
           TEST_COMMAND: ${{ matrix.test_command }}
         run: |
           mkdir -p ".module-benchmark/$MODULE_ID"
+          started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           set +e
           /usr/bin/time -v -o ".module-benchmark/$MODULE_ID/time.txt" bash -lc "$TEST_COMMAND" > ".module-benchmark/$MODULE_ID/stdout.txt" 2> ".module-benchmark/$MODULE_ID/stderr.txt"
           status=$?
+          ended_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           export MODULE_EXIT_STATUS="$status"
+          export MODULE_STARTED_AT="$started_at"
+          export MODULE_ENDED_AT="$ended_at"
           python - <<'PY'
           import json
           import os
@@ -143,16 +147,27 @@ jobs:
           module_id = os.environ["MODULE_ID"]
           root = Path(".module-benchmark") / module_id
           elapsed = None
+          user_seconds = None
+          system_seconds = None
+          max_rss_bytes = None
           for line in (root / "time.txt").read_text(errors="replace").splitlines():
               if "Elapsed (wall clock) time" in line:
                   value = line.split("): ", 1)[-1].strip()
                   parts = [float(part) for part in value.split(":")]
                   elapsed = parts[-1] + (parts[-2] * 60 if len(parts) > 1 else 0) + (parts[-3] * 3600 if len(parts) > 2 else 0)
+              if "User time (seconds)" in line: user_seconds = float(line.split(":", 1)[1].strip())
+              if "System time (seconds)" in line: system_seconds = float(line.split(":", 1)[1].strip())
+              if "Maximum resident set size (kbytes)" in line: max_rss_bytes = int(line.split(":", 1)[1].strip()) * 1024
           (root / "execution.json").write_text(json.dumps({
               "module_id": module_id,
               "command": os.environ["TEST_COMMAND"],
               "exit_code": int(os.environ["MODULE_EXIT_STATUS"]),
+              "started_at": os.environ["MODULE_STARTED_AT"],
+              "ended_at": os.environ["MODULE_ENDED_AT"],
               "wall_clock_seconds": elapsed,
+              "cpu_seconds": (user_seconds + system_seconds) if user_seconds is not None and system_seconds is not None else None,
+              "max_rss_bytes": max_rss_bytes,
+              "resource_evidence": "available" if user_seconds is not None and system_seconds is not None and max_rss_bytes is not None else "unavailable",
           }, sort_keys=True))
           PY
           exit "$status"
@@ -192,6 +207,7 @@ jobs:
           DETECT_RESULT: ${{ needs.detect.result }}
           MODE: ${{ inputs.mode }}
           BASELINE_REF: ${{ inputs.baseline_ref }}
+          WORKFLOW_STARTED_AT: ${{ github.run_started_at }}
         run: |
           mkdir -p module-benchmark-report
           python - <<'PY'
@@ -204,6 +220,13 @@ jobs:
           failed = os.environ["MATRIX_RESULT"] not in {"success", "skipped"} or os.environ["DETECT_RESULT"] != "success"
           result = "failed" if failed else "inconclusive"
           critical_path = max((record.get("wall_clock_seconds") or 0 for record in executions), default=0)
+          sum_work = sum((record.get("wall_clock_seconds") or 0 for record in executions))
+          resource_evidence = "available" if executions and all(record.get("resource_evidence") == "available" for record in executions) else "unavailable"
+          workflow_wall_clock = None
+          if os.environ.get("WORKFLOW_STARTED_AT"):
+              from datetime import datetime, timezone
+              workflow_started = datetime.fromisoformat(os.environ["WORKFLOW_STARTED_AT"].replace("Z", "+00:00"))
+              workflow_wall_clock = round((datetime.now(timezone.utc) - workflow_started).total_seconds(), 3)
           comparison_id = f"{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
           manifest_uri = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
           manifest = {
@@ -213,11 +236,20 @@ jobs:
               "result": result,
               "executions": executions,
               "critical_path_seconds": critical_path,
+              "sum_work_seconds": sum_work,
+              "workflow_wall_clock_seconds": workflow_wall_clock,
+              "resource_evidence": resource_evidence,
               "manifest_uri": manifest_uri,
           }
           Path("module-benchmark-report/manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
-          Path("module-benchmark-report/report.md").write_text(
-              f"# Module benchmark\n\nResult: `{result}`\n\nCritical path: `{critical_path}` seconds\n")
+          report = [
+              "# Module benchmark", "", f"Result: `{result}`", "",
+              f"Workflow wall-clock: `{workflow_wall_clock if workflow_wall_clock is not None else 'unavailable'}` seconds",
+              f"Critical path: `{critical_path}` seconds", f"Sum of module work: `{sum_work}` seconds",
+              f"Resource evidence: `{resource_evidence}`", "", "| Module | Wall-clock (s) | Exit |", "| --- | ---: | ---: |",
+          ]
+          report.extend(f"| {record.get('module_id', 'unknown')} | {record.get('wall_clock_seconds', 'unavailable')} | {record.get('exit_code', 'unavailable')} |" for record in executions)
+          Path("module-benchmark-report/report.md").write_text("\n".join(report) + "\n")
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               output.write(f"result={result}\ncomparison_id={comparison_id}\n")
               output.write(f"manifest_uri={manifest_uri}\nreport_artifact=module-benchmark-report\n")
