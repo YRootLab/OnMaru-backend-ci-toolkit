@@ -36,7 +36,7 @@ OnMaruBE는 Spring Gradle multi-module과 FastAPI를 함께 포함하며, 현재
 
 선택한 대안: **consumer-configured reusable workflow**. OnMaruBE는 `.github/benchmark-modules.yml`, source-specific command, deployment environment, secret, promotion 권한을 소유한다. Toolkit은 `workflow_call` interface, catalog validation/planning, evidence normalization, comparison, DAG/critical-path analysis, report, recommendation engine을 제공한다. Consumer workflow는 toolkit release tag 또는 immutable commit SHA를 지정해 호출하며 toolkit source를 runtime dependency로 import하지 않는다.
 
-PR mode는 read-only source access으로 affected module을 병렬 실행하고 10% 초과 회귀를 warning으로 표시한다. develop mode는 full-suite evidence를 저장한다. release mode는 동일 조건의 5회 유효 run 중앙값을 비교하고 15% 초과 회귀를 approval hold로 분류한다. 조건 불일치, artifact 누락, 표본 부족은 regression이 아니라 `inconclusive`다.
+PR mode는 read-only source access으로 affected module을 병렬 실행하고 10% 초과 회귀를 warning으로 표시한다. develop mode는 full-suite evidence를 저장한다. release mode는 baseline/candidate 각각 동일 조건의 3회 유효 run 중앙값을 비교하고 15% 초과 회귀를 approval hold로 분류한다. 조건 불일치, artifact 누락, 표본 부족은 regression이 아니라 `inconclusive`다. 세 표본만으로 통계적 유의성을 주장하지 않는다.
 
 ## 결과 및 영향
 

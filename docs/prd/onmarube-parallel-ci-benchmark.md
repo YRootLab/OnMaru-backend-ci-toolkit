@@ -127,9 +127,9 @@ Workflow는 `detect → matrix test → aggregate → verify fan-in` 구조다. 
 | PR | affected + reverse dependencies | 1 | 10% 초과는 warning | GitHub Artifact |
 | develop | full suite | 1 | evidence only | GitHub Artifact |
 | nightly | full suite | 3 | flaky/변동성 분석 | GitHub Artifact |
-| release | full suite, 동일 조건 | 5 | 중앙값 15% 초과는 approval hold | GitHub Release asset + manifest |
+| release | full suite, 동일 조건 | baseline/candidate 각 3 | 중앙값 15% 초과는 approval hold | GitHub Release asset + manifest |
 
-Comparability key는 `repository`, `commit SHA`, `suite`, `catalog/config hash`, runner image, Java/Python version, cache state, database fixture, CPU/memory profile, dependency mode를 포함한다. 하나라도 불일치하면 `inconclusive`다.
+Comparability key는 `repository`, `suite`, `catalog/config hash`, runner image, Java/Python version, cache state, database fixture, CPU/memory profile, dependency mode를 포함한다. 하나라도 불일치하면 `inconclusive`다. `commit SHA`는 각 표본의 불변 실행 신원으로 보존한다. 개선 실험에서는 애플리케이션 source SHA를 같게 유지하고 의도적으로 바꾼 workflow/cache 설정을 기록한다. 서로 다른 release의 SHA를 서로 같아야 하는 조건으로 사용하지 않는다.
 
 `develop` artifact는 빠른 비교를 위한 단기 baseline이다. release 비교의 durable source of truth는 tag, commit SHA, image digest, config hash, report checksum을 포함한 GitHub Release asset이다.
 
@@ -174,7 +174,7 @@ Recommendation engine은 critical path, cache miss, resource contention, flaky m
 - `verify` fan-in check는 모든 required child job의 결과를 통합하고 기존 branch protection 이름을 유지한다.
 - Testcontainers/heavy module은 configured concurrency를 넘지 않으며 resource evidence를 남긴다.
 - S1 순차 baseline, S2 job parallel, S3 Gradle tuning, S4 pytest parallel, S5 affected execution을 동일 commit에서 비교한다.
-- release mode는 5회 valid run, baseline comparability, image digest/smoke evidence를 검증한다.
+- release mode는 baseline/candidate 각 3회 valid run, baseline comparability, image digest/smoke evidence를 검증한다. 개별 값과 변동폭을 보고하며 세 표본만으로 통계적 유의성을 주장하지 않는다.
 - workflow security test는 fork PR secret isolation과 최소 권한을 검증한다.
 
 ## 9. 범위 밖
