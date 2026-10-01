@@ -41,10 +41,11 @@ def fixture_evidence(outcome, run_id, now_ns):
     return normalize_actions_timeline(run, {"total_count": len(jobs), "jobs": jobs}, toolkit_ref="b" * 40, expected_modules=expected, module_artifacts=[{"id": 91, "data": json.dumps(module).encode()}])
 
 
-def validate_frames(response):
+def validate_frames(response, *, numeric=False):
     result = response.get("results", {}).get("A", {})
     # A timestamp-only/all-null series is not evidence of displayed data.
-    if result.get("error") or not any(any(value is not None for column in frame.get("data", {}).get("values", [])[1:] for value in column) for frame in result.get("frames", [])):
+    values = [value for frame in result.get("frames", []) for column in frame.get("data", {}).get("values", [])[1:] for value in column if value is not None]
+    if result.get("error") or not values or (numeric and any(type(value) not in (int, float) or not math.isfinite(value) for value in values)):
         raise ValueError("Grafana query returned an error or empty frames")
 
 
@@ -87,19 +88,23 @@ def main(argv=None):
     for item in contract["queries"]:
         target = dict(panels[item["panel_id"]]["targets"][0])
         target.update(intervalMs=2000, maxDataPoints=1000)
+        numeric_values = []
 
         def check(timeout):
             if item["language"] == "promql":
                 response = request(args.prometheus + "/api/v1/query?" + urlencode({"query": item["query"]}), timeout=timeout)
                 values = {"workflow_duration": [8], "job_duration": [8], "step_duration": [6], "module_duration": [6], "work": [6, 8]}.get(item["key"], [1])
+                if item.get("source") == "collector-internal":
+                    values = [1] if item["key"] == "collector_scrape_health" else []
                 validate_values(response, values)
+                numeric_values[:] = [float(record["value"][1]) for record in response["data"]["result"]]
             else:
                 outcome = "success" if item["key"] == "success_traces" else "failure"
                 response = request(args.tempo + "/api/search?" + urlencode({"q": item["query"], "limit": 20, "spss": 1, "start": now // 1_000_000_000 - 3600, "end": now // 1_000_000_000 + 60}), timeout=timeout)
                 if traces[outcome] not in {trace["traceID"] for trace in response.get("traces", [])}:
                     raise ValueError("Expected outcome trace was not found by canonical TraceQL")
             response = request(args.grafana + "/api/ds/query", {"from": str(now // 1_000_000 - 3600000), "to": str(time.time_ns() // 1_000_000), "queries": [target]}, timeout=timeout)
-            validate_frames(response)
+            validate_frames(response, numeric=item["language"] == "promql")
             if item["language"] == "traceql":
                 frame = response["results"]["A"]["frames"][0]
                 columns = {field["name"]: values for field, values in zip(frame["schema"]["fields"], frame["data"]["values"])}
@@ -111,7 +116,7 @@ def main(argv=None):
             return response
 
         response = retry(check, args.timeout)
-        checked.append({"key": item["key"], "frames": len(response["results"]["A"]["frames"]), "fields": [field["name"] for frame in response["results"]["A"]["frames"] for field in frame.get("schema", {}).get("fields", [])]})
+        checked.append({"key": item["key"], "frames": len(response["results"]["A"]["frames"]), "values": numeric_values, "fields": [field["name"] for frame in response["results"]["A"]["frames"] for field in frame.get("schema", {}).get("fields", [])]})
     print(json.dumps({"status": "passed", "dashboard_uid": "toolkit-ci-benchmark", "provisioned": True, "queries": checked, "traces": traces, "replay": "duplicate_without_requests", "fixture": "synthetic; Actions/artifact links are destinations only"}, sort_keys=True))
     return 0
 

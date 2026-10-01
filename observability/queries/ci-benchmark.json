@@ -46,6 +46,36 @@
       "query": "topk(20, sum by (scope, quality) (toolkit_ci_collection_quality{workflow=\"ci\",environment=\"test\"}))"
     },
     {
+      "key": "export_failed_spans", "panel_id": 9, "language": "promql", "source": "collector-internal", "unit": "short",
+      "title": "Collector → Tempo failed span attempts",
+      "description": "Collector 0.162.0 send-failed counter since process start; retries can count a span repeatedly, not unique lost spans. Counter is lazy: zero is shown only after observed successful exports while self-scrape is up. No telemetry before first delivery or while scrape is down. This excludes pre-Collector Toolkit HTTP failures.",
+      "query": "(sum by (exporter) (otelcol_exporter_send_failed_spans_total{job=\"collector-internal\",exporter=\"otlp_grpc/tempo\"}) or (0 * sum by (exporter) (otelcol_exporter_sent_spans_total{job=\"collector-internal\",exporter=\"otlp_grpc/tempo\"}))) and on() (up{job=\"collector-internal\",instance=\"collector:8888\"} == 1)"
+    },
+    {
+      "key": "export_failed_metric_points", "panel_id": 10, "language": "promql", "source": "collector-internal", "unit": "short",
+      "title": "Collector Prometheus exporter failed point attempts",
+      "description": "Exporter-reported failed metric-point attempts since restart. Zero requires a successful export and live self-scrape. The pull exporter accepting points into its cache is not proof Prometheus scraped or retained them; inspect source-series/query smoke too. Not Toolkit HTTP delivery status.",
+      "query": "(sum by (exporter) (otelcol_exporter_send_failed_metric_points_total{job=\"collector-internal\",exporter=\"prometheus\"}) or (0 * sum by (exporter) (otelcol_exporter_sent_metric_points_total{job=\"collector-internal\",exporter=\"prometheus\"}))) and on() (up{job=\"collector-internal\",instance=\"collector:8888\"} == 1)"
+    },
+    {
+      "key": "export_queue_pressure", "panel_id": 13, "language": "promql", "source": "collector-internal", "unit": "percent",
+      "title": "Tempo export queue pressure — lag proxy",
+      "description": "100 × waiting batches / configured capacity (256). Backlog pressure is a lag proxy, not elapsed seconds. In-flight requests have left the queue and can retry while this reads zero; inspect the adjacent in-flight panel. The Prometheus pull exporter has no equivalent sending queue.",
+      "query": "(100 * sum by (exporter) (otelcol_exporter_queue_size{job=\"collector-internal\",exporter=\"otlp_grpc/tempo\"}) / sum by (exporter) (otelcol_exporter_queue_capacity{job=\"collector-internal\",exporter=\"otlp_grpc/tempo\"})) and on() (up{job=\"collector-internal\",instance=\"collector:8888\"} == 1)"
+    },
+    {
+      "key": "export_in_flight", "panel_id": 14, "language": "promql", "source": "collector-internal", "unit": "short",
+      "title": "Tempo export requests in flight / retry backoff",
+      "description": "Active requests including retry backoff. Sustained activity plus failed attempts signals a blocked backend even if queue utilization is zero. This is requests, not spans or elapsed lag seconds. Metric is development stability in the pinned Collector; revalidate names on upgrade.",
+      "query": "sum by (exporter) (otelcol_exporter_in_flight_requests{job=\"collector-internal\",exporter=\"otlp_grpc/tempo\"}) and on() (up{job=\"collector-internal\",instance=\"collector:8888\"} == 1)"
+    },
+    {
+      "key": "collector_scrape_health", "panel_id": 15, "language": "promql", "source": "collector-internal", "unit": "short",
+      "title": "Collector self-scrape health — 1 up / 0 down",
+      "description": "Prometheus scrape health for collector:8888 on the Compose network. Zero means the operational panels cannot observe current exporter state. It does not describe the CI conclusion or prove backend delivery. No host port exposes the internal endpoint.",
+      "query": "up{job=\"collector-internal\",instance=\"collector:8888\"}"
+    },
+    {
       "key": "success_traces", "panel_id": 11, "language": "traceql", "unit": "none",
       "title": "Successful workflow traces — up to 20 matches",
       "description": "Select a trace ID to open Tempo. Run ID links open original Actions and its manifest artifact list; match the selected manifest digest before downloading. Fixed repository and digit-only run IDs prevent arbitrary URL interpolation.",

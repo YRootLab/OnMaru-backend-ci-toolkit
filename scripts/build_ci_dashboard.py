@@ -13,8 +13,11 @@ def dashboard(contract):
     def text(panel_id, title, content, y, height=4):
         return {"id": panel_id, "title": title, "type": "text", "gridPos": {"x": 0, "y": y, "w": 24, "h": height}, "options": {"mode": "markdown", "content": content}}
 
-    panels = [text(1, "CI observations · source evidence stays authoritative", "Fixed scope: **ci / test**, **YRootLab/OnMaru-backend**. Duration panels show exported histogram snapshot means, not percentiles or three-run comparisons. Outcome/quality/work are gauges; never interpret scrape samples as cumulative run totals. Missing data is unknown. Traces reconstruct observed job windows; workflow wall-clock, queue and critical path are unavailable.\n\nOpen a trace, then the run ID's **Actions run** or **Manifest artifacts** link. The latter opens the run artifact list: choose the persisted evidence whose digest matches `toolkit.ci.manifest.digest`. Export status is consumer-local; see the two visibility-gap panels.", 0, 5)]
-    for index, item in enumerate(contract["queries"]):
+    panels = [text(1, "CI observations · source evidence stays authoritative", "Fixed metric scope: **ci / test**, trace repository: **YRootLab/OnMaru-backend**. Duration panels show exported histogram snapshot means, not percentiles or three-run comparisons. Outcome/quality/work are gauges; never interpret scrape samples as cumulative run totals. Missing data is unknown. Traces reconstruct observed job windows; workflow wall-clock, queue and critical path are unavailable.\n\nCollector operational panels separately observe downstream failures and queue pressure on this local Collector. Open a trace, then the run ID's **Actions run** or **Manifest artifacts** link. The latter opens the artifact list: match the persisted evidence digest. Pre-Collector Toolkit delivery status remains consumer-local; see the boundary notice.", 0, 5)]
+    metric_count = sum(item["language"] == "promql" for item in contract["queries"])
+    notice_y = 5 + 8 * ((metric_count + 1) // 2)
+    metric_index = trace_index = 0
+    for item in contract["queries"]:
         trace = item["language"] == "traceql"
         source = {"type": "tempo" if trace else "prometheus", "uid": "local-tempo" if trace else "local-prometheus"}
         target = {"refId": "A", "datasource": source}
@@ -22,7 +25,7 @@ def dashboard(contract):
             target.update(query=item["query"], queryType="traceql", tableType="spans", limit=20, spss=1)
         else:
             target.update(expr=item["query"], editorMode="code", range=True, instant=False, legendFormat="__auto")
-        panel = {"id": item["panel_id"], "title": item["title"], "description": item["description"], "type": "table" if trace else "timeseries", "datasource": source, "targets": [target], "gridPos": {"x": 0 if trace else index % 2 * 12, "y": 45 + (index - 7) * 10 if trace else 5 + index // 2 * 8, "w": 24 if trace else 12, "h": 10 if trace else 8}, "fieldConfig": {"defaults": {"unit": item["unit"], "noValue": "No telemetry", "custom": {}}, "overrides": []}, "options": {"showHeader": True} if trace else {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "single"}}}
+        panel = {"id": item["panel_id"], "title": item["title"], "description": item["description"], "type": "table" if trace else "timeseries", "datasource": source, "targets": [target], "gridPos": {"x": 0 if trace else metric_index % 2 * 12, "y": notice_y + 5 + trace_index * 10 if trace else 5 + metric_index // 2 * 8, "w": 24 if trace else 12, "h": 10 if trace else 8}, "fieldConfig": {"defaults": {"unit": item["unit"], "noValue": "No telemetry", "custom": {}}, "overrides": []}, "options": {"showHeader": True} if trace else {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "single"}}}
         if trace:
             panes = {"trace": {"datasource": "local-tempo", "queries": [{"refId": "A", "queryType": "traceql", "query": "TRACE_ID"}], "range": {"from": "now-1h", "to": "now"}}}
             trace_url = "/explore?schemaVersion=1&panes=" + quote(json.dumps(panes, separators=(",", ":")), safe="").replace("TRACE_ID", "${__value.raw:percentencode}")
@@ -32,10 +35,11 @@ def dashboard(contract):
                 {"matcher": {"id": "byName", "options": "cicd.pipeline.run.id"}, "properties": [{"id": "links", "value": [{"title": "Actions run", "url": run_url, "targetBlank": True}, {"title": "Manifest artifacts", "url": run_url + "#artifacts", "targetBlank": True}]}]},
             ]
         panels.append(panel)
-    panels.extend([
-        text(9, "Exporter failures — consumer-local", "**Unavailable here: not exported by OTLP v1.** Read the consumer's persisted `ExportResult.status`, `reason`, `pending_batches`, `terminal_partial_batches` and request attempts. A healthy Collector or recent CI metrics cannot prove exporter success. Alert on consumer-local failed/partial delivery separately; preserve the original CI conclusion and manifest.", 37),
-        text(10, "Export lag — consumer-local", "**Unavailable here: not exported by OTLP v1.** Record source completion, collection time and successful export acknowledgement in consumer-local diagnostics. Lag = acknowledgement − source completion, not scrape age or observed job duration. Missing completion/acknowledgement means unknown/pending, never zero. A separately reviewed bounded health adapter is required before graphing or alerting on these values.", 41),
-    ])
+        if trace:
+            trace_index += 1
+        else:
+            metric_index += 1
+    panels.append(text(16, "Delivery boundary · Toolkit → Collector → backends", "**Collector panels measure downstream exporter activity, not the pre-Collector Toolkit HTTP path.** Toolkit `ExportResult.status`, `reason`, `pending_batches`, `terminal_partial_batches` and acknowledgement timestamps remain consumer-local and cannot be observed through the same failed channel. Preserve those diagnostics and the original CI conclusion independently.\n\nQueue utilization and in-flight requests are backlog/lag proxies, not seconds. Exact end-to-end lag = acknowledgement − source completion; unavailable timestamps mean unknown. The Prometheus pull exporter's accepted-point count is not proof of scrape/retention. Self-scrape must be up before zero observed failures is shown; an idle never-used exporter has no failure baseline.", notice_y, 5))
     return {"id": None, "uid": "toolkit-ci-benchmark", "title": "Toolkit CI benchmark observations", "description": "Generated by scripts/build_ci_dashboard.py from observability/queries/ci-benchmark.json. Evidence and telemetry contracts v1.", "tags": ["ci", "pipeline-toolkit"], "timezone": "utc", "schemaVersion": 39, "version": 1, "editable": False, "refresh": "30s", "time": {"from": "now-1h", "to": "now"}, "timepicker": {"refresh_intervals": ["30s", "1m", "5m"]}, "templating": {"list": []}, "annotations": {"list": []}, "links": [], "panels": sorted(panels, key=lambda panel: panel["id"])}
 
 

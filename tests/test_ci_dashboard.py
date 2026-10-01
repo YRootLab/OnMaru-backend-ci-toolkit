@@ -54,6 +54,10 @@ def test_queries_have_fixed_finite_scope_and_no_identity_metric_labels():
         query = item["query"]
         assert "$" not in query
         if item["language"] == "promql":
+            if item.get("source") == "collector-internal":
+                assert 'job="collector-internal"' in query
+                assert "or vector(0)" not in query
+                continue
             assert 'workflow="ci"' in query and 'environment="test"' in query
             assert not re.search(r"run_id|sha|digest|url|test_name|path", query)
             assert "topk(20," in query or item["key"] == "workflow_duration"
@@ -104,13 +108,40 @@ def test_bundled_query_plugins_cannot_be_replaced_by_unbounded_background_downlo
     assert environment.get("GF_PLUGINS_PREINSTALL_AUTO_UPDATE") == "false"
 
 
+def test_collector_internal_metrics_are_scraped_without_host_exposure():
+    collector = yaml.safe_load((ROOT / "observability/local/otel-collector.yaml").read_text())
+    telemetry = collector["service"].get("telemetry", {})
+    assert telemetry.get("metrics", {}).get("readers") == [{"pull": {"exporter": {"prometheus": {"host": "0.0.0.0", "port": 8888, "without_type_suffix": False, "without_units": True}}}}]
+    jobs = yaml.safe_load((ROOT / "observability/local/prometheus.yaml").read_text())["scrape_configs"]
+    assert any(job["job_name"] == "collector-internal" and job["static_configs"] == [{"targets": ["collector:8888"]}] for job in jobs)
+    job = next(job for job in jobs if job["job_name"] == "collector-internal")
+    assert job.get("sample_limit") == 128
+    kept = job.get("metric_relabel_configs", [])
+    assert len(kept) == 1 and kept[0]["action"] == "keep" and kept[0]["source_labels"] == ["__name__"]
+    for name in ("send_failed_spans_total", "send_failed_metric_points_total", "sent_spans_total", "sent_metric_points_total", "queue_size", "queue_capacity", "in_flight_requests"):
+        assert re.fullmatch(kept[0]["regex"], "otelcol_exporter_" + name)
+    assert not re.fullmatch(kept[0]["regex"], "otelcol_exporter_enqueue_size_bucket")
+    compose = yaml.safe_load((ROOT / "observability/local/compose.yaml").read_text())
+    assert not any("8888" in port for service in compose["services"].values() for port in service.get("ports", []))
+
+
 def test_export_health_does_not_invent_metrics_or_treat_no_data_as_success():
     dashboard = document("observability/dashboards/ci-benchmark.json")
-    panels = {panel["title"]: panel for panel in dashboard["panels"]}
-    for title in ("Exporter failures — consumer-local", "Export lag — consumer-local"):
-        panel = panels[title]
-        assert panel["type"] == "text" and not panel.get("targets")
-        assert "not exported" in panel["options"]["content"]
+    panels = {panel["id"]: panel for panel in dashboard["panels"]}
+    queries = {item["key"]: item for item in document("observability/queries/ci-benchmark.json")["queries"]}
+    for key, metric in (("export_failed_spans", "otelcol_exporter_send_failed_spans_total"), ("export_failed_metric_points", "otelcol_exporter_send_failed_metric_points_total"), ("export_queue_pressure", "otelcol_exporter_queue_size"), ("export_in_flight", "otelcol_exporter_in_flight_requests"), ("collector_scrape_health", "up{")):
+        assert key in queries, "missing actual exporter-health signal: " + key
+        item = queries[key]
+        assert item["source"] == "collector-internal"
+        assert metric in item["query"]
+        assert panels[item["panel_id"]]["type"] == "timeseries"
+        if key != "collector_scrape_health":
+            assert 'and on() (up{job="collector-internal",instance="collector:8888"} == 1)' in item["query"]
+        if key.startswith("export_failed"):
+            assert "0 * sum by (exporter) (otelcol_exporter_sent_" in item["query"]
+    assert "otelcol_exporter_queue_capacity" in queries["export_queue_pressure"]["query"]
+    notices = [panel["options"]["content"] for panel in panels.values() if panel["type"] == "text"]
+    assert any("pre-Collector" in notice and "ExportResult" in notice for notice in notices)
 
 
 def test_canonical_generator_reproduces_committed_dashboard():
@@ -128,6 +159,24 @@ def smoke_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_outage_fixture_is_bounded_and_uses_only_synthetic_trace_payloads():
+    path = ROOT / "scripts/collector_outage_smoke.py"
+    assert path.is_file(), "scoped Collector outage smoke is missing"
+    sys.path.insert(0, str(ROOT / "scripts"))
+    spec = importlib.util.spec_from_file_location("collector_outage_smoke", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    payloads = module.outage_payloads(1790812810000000000)
+    assert len(payloads) == 16
+    for payload in payloads:
+        assert len(json.dumps(payload).encode()) < 256 * 1024
+        scope = payload["resourceSpans"][0]["scopeSpans"][0]
+        spans = scope["spans"]
+        assert len(spans) == 512 and len({span["spanId"] for span in spans}) == 512
+        assert {span["name"] for span in spans} == {"collector-outage-fixture"}
+    assert len({payload["resourceSpans"][0]["scopeSpans"][0]["spans"][0]["traceId"] for payload in payloads}) == 16
 
 
 def test_live_smoke_uses_real_success_failure_evidence_and_reserved_label_safe_transform():
@@ -156,6 +205,10 @@ def test_live_smoke_requires_nonempty_query_frames_and_expected_values():
     with pytest.raises(ValueError):
         smoke.validate_frames({"results": {"A": {"frames": [{"data": {"values": [[1], [None]]}}]}}})
     smoke.validate_frames({"results": {"A": {"frames": [{"data": {"values": [[1], [8]]}}]}}})
+    with pytest.raises(ValueError):
+        smoke.validate_frames({"results": {"A": {"frames": [{"data": {"values": [[1], ["not a number"]]}}]}}}, numeric=True)
+    with pytest.raises(ValueError):
+        smoke.validate_frames({"results": {"A": {"frames": [{"data": {"values": [[1], [float("inf")]]}}]}}}, numeric=True)
     with pytest.raises(ValueError):
         smoke.validate_values({"status": "success", "data": {"result": [{"value": [1, "nan"]}]}}, [8])
     smoke.validate_values({"status": "success", "data": {"result": [{"value": [1, "8"]}]}}, [8])

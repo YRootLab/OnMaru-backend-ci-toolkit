@@ -43,7 +43,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "Fixed scope: **ci / test**, **YRootLab/OnMaru-backend**. Duration panels show exported histogram snapshot means, not percentiles or three-run comparisons. Outcome/quality/work are gauges; never interpret scrape samples as cumulative run totals. Missing data is unknown. Traces reconstruct observed job windows; workflow wall-clock, queue and critical path are unavailable.\n\nOpen a trace, then the run ID's **Actions run** or **Manifest artifacts** link. The latter opens the run artifact list: choose the persisted evidence whose digest matches `toolkit.ci.manifest.digest`. Export status is consumer-local; see the two visibility-gap panels."
+        "content": "Fixed metric scope: **ci / test**, trace repository: **YRootLab/OnMaru-backend**. Duration panels show exported histogram snapshot means, not percentiles or three-run comparisons. Outcome/quality/work are gauges; never interpret scrape samples as cumulative run totals. Missing data is unknown. Traces reconstruct observed job windows; workflow wall-clock, queue and critical path are unavailable.\n\nCollector operational panels separately observe downstream failures and queue pressure on this local Collector. Open a trace, then the run ID's **Actions run** or **Manifest artifacts** link. The latter opens the artifact list: match the persisted evidence digest. Pre-Collector Toolkit delivery status remains consumer-local; see the boundary notice."
       }
     },
     {
@@ -377,32 +377,96 @@
     },
     {
       "id": 9,
-      "title": "Exporter failures — consumer-local",
-      "type": "text",
+      "title": "Collector → Tempo failed span attempts",
+      "description": "Collector 0.162.0 send-failed counter since process start; retries can count a span repeatedly, not unique lost spans. Counter is lazy: zero is shown only after observed successful exports while self-scrape is up. No telemetry before first delivery or while scrape is down. This excludes pre-Collector Toolkit HTTP failures.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "local-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "local-prometheus"
+          },
+          "expr": "(sum by (exporter) (otelcol_exporter_send_failed_spans_total{job=\"collector-internal\",exporter=\"otlp_grpc/tempo\"}) or (0 * sum by (exporter) (otelcol_exporter_sent_spans_total{job=\"collector-internal\",exporter=\"otlp_grpc/tempo\"}))) and on() (up{job=\"collector-internal\",instance=\"collector:8888\"} == 1)",
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "__auto"
+        }
+      ],
       "gridPos": {
-        "x": 0,
-        "y": 37,
-        "w": 24,
-        "h": 4
+        "x": 12,
+        "y": 29,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No telemetry",
+          "custom": {}
+        },
+        "overrides": []
       },
       "options": {
-        "mode": "markdown",
-        "content": "**Unavailable here: not exported by OTLP v1.** Read the consumer's persisted `ExportResult.status`, `reason`, `pending_batches`, `terminal_partial_batches` and request attempts. A healthy Collector or recent CI metrics cannot prove exporter success. Alert on consumer-local failed/partial delivery separately; preserve the original CI conclusion and manifest."
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
       }
     },
     {
       "id": 10,
-      "title": "Export lag — consumer-local",
-      "type": "text",
+      "title": "Collector Prometheus exporter failed point attempts",
+      "description": "Exporter-reported failed metric-point attempts since restart. Zero requires a successful export and live self-scrape. The pull exporter accepting points into its cache is not proof Prometheus scraped or retained them; inspect source-series/query smoke too. Not Toolkit HTTP delivery status.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "local-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "local-prometheus"
+          },
+          "expr": "(sum by (exporter) (otelcol_exporter_send_failed_metric_points_total{job=\"collector-internal\",exporter=\"prometheus\"}) or (0 * sum by (exporter) (otelcol_exporter_sent_metric_points_total{job=\"collector-internal\",exporter=\"prometheus\"}))) and on() (up{job=\"collector-internal\",instance=\"collector:8888\"} == 1)",
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "__auto"
+        }
+      ],
       "gridPos": {
         "x": 0,
-        "y": 41,
-        "w": 24,
-        "h": 4
+        "y": 37,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No telemetry",
+          "custom": {}
+        },
+        "overrides": []
       },
       "options": {
-        "mode": "markdown",
-        "content": "**Unavailable here: not exported by OTLP v1.** Record source completion, collection time and successful export acknowledgement in consumer-local diagnostics. Lag = acknowledgement − source completion, not scrape age or observed job duration. Missing completion/acknowledgement means unknown/pending, never zero. A separately reviewed bounded health adapter is required before graphing or alerting on these values."
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
       }
     },
     {
@@ -430,7 +494,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 45,
+        "y": 58,
         "w": 24,
         "h": 10
       },
@@ -523,7 +587,7 @@
       ],
       "gridPos": {
         "x": 0,
-        "y": 55,
+        "y": 68,
         "w": 24,
         "h": 10
       },
@@ -589,6 +653,162 @@
       },
       "options": {
         "showHeader": true
+      }
+    },
+    {
+      "id": 13,
+      "title": "Tempo export queue pressure — lag proxy",
+      "description": "100 × waiting batches / configured capacity (256). Backlog pressure is a lag proxy, not elapsed seconds. In-flight requests have left the queue and can retry while this reads zero; inspect the adjacent in-flight panel. The Prometheus pull exporter has no equivalent sending queue.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "local-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "local-prometheus"
+          },
+          "expr": "(100 * sum by (exporter) (otelcol_exporter_queue_size{job=\"collector-internal\",exporter=\"otlp_grpc/tempo\"}) / sum by (exporter) (otelcol_exporter_queue_capacity{job=\"collector-internal\",exporter=\"otlp_grpc/tempo\"})) and on() (up{job=\"collector-internal\",instance=\"collector:8888\"} == 1)",
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "__auto"
+        }
+      ],
+      "gridPos": {
+        "x": 12,
+        "y": 37,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "No telemetry",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "title": "Tempo export requests in flight / retry backoff",
+      "description": "Active requests including retry backoff. Sustained activity plus failed attempts signals a blocked backend even if queue utilization is zero. This is requests, not spans or elapsed lag seconds. Metric is development stability in the pinned Collector; revalidate names on upgrade.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "local-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "local-prometheus"
+          },
+          "expr": "sum by (exporter) (otelcol_exporter_in_flight_requests{job=\"collector-internal\",exporter=\"otlp_grpc/tempo\"}) and on() (up{job=\"collector-internal\",instance=\"collector:8888\"} == 1)",
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "__auto"
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 45,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No telemetry",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 15,
+      "title": "Collector self-scrape health — 1 up / 0 down",
+      "description": "Prometheus scrape health for collector:8888 on the Compose network. Zero means the operational panels cannot observe current exporter state. It does not describe the CI conclusion or prove backend delivery. No host port exposes the internal endpoint.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "local-prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "local-prometheus"
+          },
+          "expr": "up{job=\"collector-internal\",instance=\"collector:8888\"}",
+          "editorMode": "code",
+          "range": true,
+          "instant": false,
+          "legendFormat": "__auto"
+        }
+      ],
+      "gridPos": {
+        "x": 12,
+        "y": 45,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No telemetry",
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 16,
+      "title": "Delivery boundary · Toolkit → Collector → backends",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 53,
+        "w": 24,
+        "h": 5
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Collector panels measure downstream exporter activity, not the pre-Collector Toolkit HTTP path.** Toolkit `ExportResult.status`, `reason`, `pending_batches`, `terminal_partial_batches` and acknowledgement timestamps remain consumer-local and cannot be observed through the same failed channel. Preserve those diagnostics and the original CI conclusion independently.\n\nQueue utilization and in-flight requests are backlog/lag proxies, not seconds. Exact end-to-end lag = acknowledgement − source completion; unavailable timestamps mean unknown. The Prometheus pull exporter's accepted-point count is not proof of scrape/retention. Self-scrape must be up before zero observed failures is shown; an idle never-used exporter has no failure baseline."
       }
     }
   ]

@@ -20,6 +20,15 @@ Grafana keeps the image's bundled plugins with `GF_PLUGINS_PREINSTALL_DISABLED=t
 
 The smoke exports contemporary **synthetic** success/failure manifests through the real #118 normalizer and #120 transformer/exporter. It verifies literal source timings (8s workflow window/job, 6s step/module), every PromQL query, both TraceQL searches, nonempty Grafana frames, real drilldown field names and replay suppression. It checks provisioning rather than assuming valid JSON means Grafana imported it. Synthetic run IDs are not real GitHub runs: the smoke checks destination construction without contacting GitHub or claiming real artifacts exist.
 
+The five Collector operational queries must also return finite numeric Grafana frames. In a fresh normal state after fixtures, failed span/metric-point attempts, queue pressure and in-flight requests are 0, and self-scrape is 1. A previous outage leaves cumulative failure counts positive after recovery; the smoke accepts those retained counts rather than pretending they reset. To exercise an actual downstream outage, explicitly opt in on this disposable stack only:
+
+```sh
+PYTHONPATH=src python3 scripts/collector_outage_smoke.py --exercise-outage
+PYTHONPATH=src python3 scripts/ci_dashboard_smoke.py --timeout 45
+```
+
+The outage smoke stops only this Compose project's Tempo, sends at most 16 synthetic traces ×512 spans (each JSON request <256 KiB), and checks failed-span counter growth, nonzero queue pressure/in-flight activity and numeric Grafana outage frames. It attempts Tempo restoration in `finally` and waits for a ready backend and drained queue/in-flight requests. It never deletes volumes. If the process is forcibly killed, restore with `docker compose -f observability/local/compose.yaml start tempo`; then run the normal smoke again. Retried/expired fixture batches may be lost during the intentional outage; no real consumer data belongs in this stack.
+
 Clean up only this disposable project after inspection:
 
 ```sh
@@ -39,7 +48,11 @@ There are no label-discovery or textbox variables. Metric scope is fixed to `wor
 | Work | Latest retained job/module gauges, kept separate; adding overlapping scopes double-counts work. |
 | Outcomes | Observation-count gauge snapshot, not lifetime totals or run failure rate. Do not use rate, increase or sum over scrapes. |
 | Collection quality | Evidence/artifact/job/step/module quality includes missing/invalid/partial/unavailable. No-data remains unknown. |
-| Export failures/lag | Explicit visibility gaps. `ExportResult` and delivery timestamps are consumer-local and not exported by v1. Healthy scrape targets or fresh CI metrics cannot prove export success. |
+| Collector failed spans/points | Real exporter-reported counter values since Collector restart. Failed attempts may count a retried span repeatedly; these are not unique losses or failed CI runs. |
+| Tempo queue pressure | `100 × queue_size / queue_capacity`, in percent. Backlog is a lag proxy, not elapsed seconds; in-flight requests have already left the queue. |
+| Tempo in-flight requests | Requests including retry backoff. Sustained activity plus failed attempts can show blockage while queue pressure is zero. |
+| Collector self-scrape | Actual `up` for `collector:8888`: 1 is reachable, 0 means current exporter state cannot be observed. |
+| Toolkit delivery boundary | Pre-Collector HTTP `ExportResult` and exact acknowledgement lag remain consumer-local. They cannot be recovered through that same failed telemetry channel. |
 
 Gauge label sets can retain values from different manifests until Collector's five-minute expiry; concurrent runs overwrite shared label sets. Backend histogram temporality, resets and replay affect snapshots. These graphs show exported observations, not exact per-run history. Use manifests/traces for individual values and the experiment comparator for three-sample decisions. The local 2s scrape is for fixtures, not a Cloud recommendation.
 
@@ -49,6 +62,31 @@ The two Tempo tables distinguish success from all non-success outcomes, includin
 
 Queries follow [TraceQL's scoped-attribute/select contract](https://grafana.com/docs/tempo/latest/traceql/construct-traceql-queries/) and links follow [Grafana's data-link fields](https://grafana.com/docs/grafana/latest/visualizations/panels-visualizations/configure-data-links/). Upgrade validation must include live frame names and drilldowns.
 
+## Collector operational signal contract
+
+Collector 0.162.0 explicitly exposes its internal Prometheus reader on `0.0.0.0:8888` **inside the Compose network**, with counter suffixes enabled and unit suffixes disabled. There is no host port mapping. Prometheus scrapes it as `job="collector-internal"` separately from the CI signal endpoint on 8889. These metrics describe this Collector and its configured destinations, not individual workflows/environments or CI outcomes.
+
+The contract uses the pinned [exporterhelper metric definitions](https://github.com/open-telemetry/opentelemetry-collector/blob/v0.162.0/exporter/exporterhelper/metadata.yaml) and [Collector internal telemetry configuration](https://opentelemetry.io/docs/collector/internal-telemetry/). Normal telemetry level avoids detailed exception labels and size histograms. A metric-relabel allowlist retains only seven exporter families, with a post-relabel scrape cap of 128 samples; unexpected growth fails the scrape and shows `up=0` instead of quietly expanding storage.
+
+| Pinned Prometheus name | Selected exporter / use |
+| --- | --- |
+| `otelcol_exporter_send_failed_spans_total` | `otlp_grpc/tempo`; failed span attempts since restart. |
+| `otelcol_exporter_send_failed_metric_points_total` | `prometheus`; exporter-reported failed point attempts. |
+| `otelcol_exporter_sent_spans_total` | `otlp_grpc/tempo`; successful-send baseline for lazy counter initialization. |
+| `otelcol_exporter_sent_metric_points_total` | `prometheus`; successful cache acceptance baseline, not proof of downstream retention. |
+| `otelcol_exporter_queue_size` | `otlp_grpc/tempo`; waiting batches. |
+| `otelcol_exporter_queue_capacity` | `otlp_grpc/tempo`; configured 256-batch capacity. |
+| `otelcol_exporter_in_flight_requests` | `otlp_grpc/tempo`; active requests including retry backoff. |
+| `up` | Prometheus-generated self-scrape health; independent of exporter counters. |
+
+The allowlist contains four counter families, two queue gauges and one in-flight gauge. `up` and normal scrape bookkeeping are Prometheus-generated. The 128-sample guard applies after relabeling; budget scrape bookkeeping separately within the dashboard's metadata headroom.
+
+In this pinned version a send-failed counter is absent until its first failure. The canonical query uses `failed or (0 * sent)` grouped by exporter, and gates the result on current self-scrape `up==1`. Thus an observed successful exporter with no recorded failures has zero; an idle exporter with neither counter remains no-data, and a down self-scrape never produces a fabricated healthy zero. Revalidate this initialization behavior on Collector upgrades. If an exporter has failed before its first successful send, the real failure counter is shown directly.
+
+The Prometheus pull exporter can accept points into its cache even if later scrape conversion or downstream retention fails. Its zero failed-point count is therefore not an end-to-end guarantee; compare source series and scrape/query results too. The local pull exporter has no sending queue, so queue-pressure panels intentionally cover Tempo only. Queue pressure is not a duration estimate, and in-flight requests (development stability in 0.162.0) can hide latency after dequeue. Exact source-to-ack lag still requires consumer timestamps.
+
+Cloud integration must separately arrange collection of its Collector's internal metrics, with actual scrape-job/instance/exporter selectors substituted and smoke-tested. This repository does not remote-write local self-metrics to Cloud. A direct Toolkit-to-Cloud OTLP deployment has no local Collector hop to observe; these five local operational panels are not applicable there until a corresponding collector/health source is provisioned. Do not relabel direct HTTP success as a Collector observation.
+
 ## Budgets and enforcement boundaries
 
 Operational limits below are **rollout admission requirements**, not dashboard-enforced quotas. The consumer owner must enforce catalog/run budgets before Cloud export. Exporter/backend hard limits remain separate. Exceeding a limit must leave explicit local rejection/partial diagnostics, never silent truncation.
@@ -56,7 +94,7 @@ Operational limits below are **rollout admission requirements**, not dashboard-e
 | Dimension | Operational budget and implementation bounds |
 | --- | --- |
 | Catalog | One workflow/environment, ≤16 configured CI jobs and ≤16 modules plus `other`; no identity/path/test/step-name metric labels. Producer hard caps are 256 jobs/modules and 64-character identifiers. |
-| CI series | Admission cap 2,000 active series per workflow/environment, warning at 1,600. Conservative signal upper bound for 16+`other` catalogs is 1,682; reserve 318 for metadata/approved health signals. Count actual backend series before rollout. |
+| CI series | Admission cap 2,000 active series per workflow/environment, warning at 1,600. Conservative signal upper bound for 16+`other` catalogs is 1,682; reserve 318 for metadata/health signals, including the self-scrape's ≤128 exporter samples plus scrape bookkeeping. Count actual backend series before rollout. |
 | Spans | Operational ≤16 jobs ×64 steps +16 job roots +1 workflow =1,041 spans/run. Transformer hard cap: 8,192 combined workflow/job/step/module observations; 256 jobs and 256 steps/job. No invented module spans. |
 | Trace bytes/rate | Local Tempo: ≤1 MiB/trace, 1 MiB/s, 2 MiB burst, 1,000 active traces. Span counts do not guarantee byte bounds; check serialized trace/attribute size and retain rejection diagnostics. |
 | Batch | Defaults: 128 points/spans, 1 MiB/request, 256 batches, 16 MiB/export. Configurable ceilings: 512 items, 4 MiB/request, 512 batches. Evidence input ≤16 MiB. |
@@ -79,7 +117,9 @@ Use [Cloud trace pricing/usage](https://grafana.com/docs/grafana-cloud/platform/
 
 ## Alerts, outages and replay
 
-Initial consumer-local warning thresholds: failed/partial export, pending batches older than 15m, source-completion-to-ack lag above 15m, and invalid/missing artifacts. Review thresholds against CI duration. The dashboard does not deploy alerts for nonexistent metrics. A future independent health adapter must use finite workflow/environment/status/reason labels, fit the series budget and preserve diagnostics when the destination is down. Backend absence may be monitored separately, but idle periods with no CI runs are normal.
+The operational panels now provide real Collector alert inputs: investigate a positive increase in failed attempts over 5m, sustained queue pressure above 80% for 5m, or self-scrape down for 2m. Sustained in-flight activity must be interpreted with throughput/failures; it is not automatically an incident. These are operator-reviewed starting thresholds, not automatically installed notification rules. Counters reset on Collector restart, and an absent lazy counter or missing scrape is not evidence of success. Do not alert on raw historical counter >0 forever after recovery.
+
+Keep separate consumer-local warnings for failed/partial Toolkit export, pending batches older than 15m, source-completion-to-ack lag above 15m and invalid/missing artifacts. Review thresholds against CI duration. A future independent pre-Collector health adapter must use finite workflow/environment/status/reason labels, fit the series budget and preserve diagnostics when the destination is down. Idle periods with no CI runs are normal; only self-scrape health is expected continuously.
 
 On failure retain manifest/digest, persisted collection time, `ExportResult` and SQLite replay state. CI conclusion remains unchanged. Diagnose authentication, rate/size limits, timestamp retention, query mismatch and partial acceptance independently. Do not mark missing telemetry green or rerun benchmarks automatically. Local lag is acknowledgement minus source completion; absent completion/ack means unknown/pending, not zero and not scrape age.
 
