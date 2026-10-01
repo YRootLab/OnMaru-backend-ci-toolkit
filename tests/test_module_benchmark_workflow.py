@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 import yaml
+import pytest
 
 
 WORKFLOW = Path(".github/workflows/module-benchmark.yml")
@@ -130,7 +131,8 @@ def test_aggregate_script_writes_separate_outputs_and_rendered_report(tmp_path):
     evidence = tmp_path / "module-evidence" / "module-evidence-api"
     evidence.mkdir(parents=True)
     (evidence / "execution.json").write_text(
-        json.dumps({"module_id": "api", "wall_clock_seconds": 4.5, "exit_code": 0})
+        json.dumps({"schema_version": 1, "run_id": 123, "run_attempt": 2, "toolkit_ref": "b" * 40,
+                    "complete": True, "module_id": "api", "wall_clock_seconds": 4.5, "exit_code": 0})
     )
     (tmp_path / "module-benchmark-report").mkdir()
     output_path = tmp_path / "github-output"
@@ -145,6 +147,8 @@ def test_aggregate_script_writes_separate_outputs_and_rendered_report(tmp_path):
         "GITHUB_REPOSITORY": "YRootLab/OnMaru-backend",
         "GITHUB_OUTPUT": str(output_path),
         "WORKFLOW_STARTED_AT": "2026-10-01T00:00:00Z",
+        "EXPECTED_MATRIX": json.dumps({"include": [{"id": "api"}]}),
+        "TOOLKIT_REF": "b" * 40,
     }
 
     subprocess.run([sys.executable, "-c", script], cwd=tmp_path, env=env, check=True)
@@ -228,14 +232,59 @@ def test_aggregate_does_not_replace_unknown_module_duration_with_zero(tmp_path):
     script = summary["run"].split("python - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
     evidence = tmp_path / "module-evidence" / "module-evidence-api"
     evidence.mkdir(parents=True)
-    (evidence / "execution.json").write_text(json.dumps({"module_id": "api", "wall_clock_seconds": None, "exit_code": 1}))
+    (evidence / "execution.json").write_text(json.dumps({"schema_version": 1, "run_id": 42, "run_attempt": 2,
+        "toolkit_ref": "b" * 40, "complete": False, "module_id": "api", "wall_clock_seconds": None, "exit_code": 1}))
     (tmp_path / "module-benchmark-report").mkdir()
     env = os.environ | {"MATRIX_RESULT": "failure", "DETECT_RESULT": "success", "MODE": "pr", "BASELINE_REF": "develop",
                         "GITHUB_RUN_ID": "42", "GITHUB_RUN_ATTEMPT": "2", "GITHUB_SERVER_URL": "https://github.com",
-                        "GITHUB_REPOSITORY": "example/backend", "GITHUB_OUTPUT": str(tmp_path / "github-output")}
+                        "GITHUB_REPOSITORY": "example/backend", "GITHUB_OUTPUT": str(tmp_path / "github-output"),
+                        "EXPECTED_MATRIX": json.dumps({"include": [{"id": "api"}]}), "TOOLKIT_REF": "b" * 40}
     subprocess.run([sys.executable, "-c", script], cwd=tmp_path, env=env, check=True)
     manifest = json.loads((tmp_path / "module-benchmark-report/manifest.json").read_text())
     assert manifest["longest_module_duration_seconds"] is None
     assert manifest["longest_module_duration_quality"] == "unavailable"
     assert manifest["sum_work_quality"] == "partial"
     assert "Longest module duration: `unavailable`" in (tmp_path / "module-benchmark-report/report.md").read_text()
+
+
+@pytest.mark.parametrize("case, expected_duration, quality", [
+    ("missing", 4.5, "partial"), ("stale_attempt", None, "unavailable"),
+    ("foreign_run", None, "unavailable"), ("duplicate", None, "unavailable"),
+    ("unexpected", None, "unavailable"), ("invalid_matrix", None, "unavailable"),
+])
+def test_aggregate_validates_expected_matrix_and_current_run_attempt(tmp_path, case, expected_duration, quality):
+    summary = next(step for step in load_workflow()["jobs"]["aggregate"]["steps"] if step.get("id") == "summary")
+    script = summary["run"].split("python - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    root = tmp_path / "module-evidence/module-evidence-api"
+    root.mkdir(parents=True)
+    record = {"schema_version": 1, "run_id": 42, "run_attempt": 2, "toolkit_ref": "b" * 40,
+              "complete": True, "module_id": "api", "wall_clock_seconds": 4.5, "exit_code": 0}
+    if case == "stale_attempt":
+        record["run_attempt"] = 1
+    elif case == "foreign_run":
+        record["run_id"] = 41
+    elif case == "unexpected":
+        record["module_id"] = "other"
+    (root / "execution.json").write_text(json.dumps(record))
+    if case == "duplicate":
+        second = tmp_path / "module-evidence/duplicate"
+        second.mkdir()
+        (second / "execution.json").write_text(json.dumps(record))
+    (tmp_path / "module-benchmark-report").mkdir()
+    expected = {"include": [{"id": "api"}, {"id": "worker"}]} if case == "missing" else {"include": [{"id": "api"}]}
+    env = os.environ | {"MATRIX_RESULT": "success", "DETECT_RESULT": "success", "MODE": "pr", "BASELINE_REF": "develop",
+        "GITHUB_RUN_ID": "42", "GITHUB_RUN_ATTEMPT": "2", "GITHUB_SERVER_URL": "https://github.com",
+        "GITHUB_REPOSITORY": "example/backend", "GITHUB_OUTPUT": str(tmp_path / "github-output"),
+        "EXPECTED_MATRIX": "invalid" if case == "invalid_matrix" else json.dumps(expected), "TOOLKIT_REF": "b" * 40}
+    subprocess.run([sys.executable, "-c", script], cwd=tmp_path, env=env, check=True)
+    manifest = json.loads((tmp_path / "module-benchmark-report/manifest.json").read_text())
+    assert manifest["longest_module_duration_seconds"] == expected_duration
+    assert manifest["longest_module_duration_quality"] == quality
+    assert manifest["sum_work_quality"] == "partial"
+    assert manifest["quality"]["issues"]
+    if case != "missing":
+        assert manifest["executions"] == []
+    else:
+        assert "missing_module:worker" in manifest["quality"]["issues"]
+    report = (tmp_path / "module-benchmark-report/report.md").read_text()
+    assert "Quality issues" in report

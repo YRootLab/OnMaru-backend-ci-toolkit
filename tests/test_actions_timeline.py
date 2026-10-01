@@ -295,3 +295,18 @@ def test_artifact_join_requires_immutable_toolkit_ref_and_valid_inputs():
         normalize_actions_timeline(run(), {"total_count": True, "jobs": []})
     with pytest.raises(ValueError):
         normalize_actions_timeline(run(), {"total_count": 1, "jobs": [dict(job(), steps=[None])]})
+
+
+def test_diagnostics_expose_module_failure_even_when_job_conclusions_are_successful():
+    from pipeline_toolkit.reports.diagnostics import render_actions_diagnostics
+    f = failure_fixture()
+    f["run"]["conclusion"] = "success"
+    f["jobs"] = {"total_count": 1, "jobs": [dict(f["jobs"]["jobs"][0], conclusion="success", steps=[])]}
+    report = render_actions_diagnostics(evidence([artifact()], {"api": 701}, f))
+    assert "Module execution evidence" in report
+    assert "Module api" in report
+    assert "job 701" in report
+    assert "module-test (api)" in report
+    assert "status: failed" in report
+    assert "complete: True" in report
+    assert "exit code: 1" in report

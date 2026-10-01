@@ -47,6 +47,15 @@ def render_actions_diagnostics(evidence):
                 lines.append(f"  - Step {_text(step['number'])}: {_text(step.get('name'))} ({_text(step.get('conclusion'))}); duration quality: {_text(step['duration_quality'])}")
     if not found:
         lines.append("No observed failed or cancelled jobs or steps.")
+    lines.extend(["", "## Module execution evidence", ""])
+    jobs_by_id = {job["id"]: job for job in evidence["jobs"]}
+    for module in sorted(evidence.get("modules", []), key=lambda module: module["module_id"]):
+        job = jobs_by_id.get(module["job_id"], {})
+        lines.append(f"- Module {_text(module['module_id'])}; job {_text(module['job_id'])}: {_text(job.get('name'))}; "
+                     f"status: {_text(module.get('status'))}; complete: {_text(module.get('complete'))}; "
+                     f"exit code: {_text(module.get('exit_code'))}")
+    if not evidence.get("modules"):
+        lines.append("No observed module execution evidence.")
     lines.extend(["", "## Quality issues", ""])
     lines.extend("- " + _text(issue) for issue in quality["issues"])
     if not quality["issues"]:
