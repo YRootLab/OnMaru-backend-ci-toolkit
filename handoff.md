@@ -8,10 +8,11 @@ Updated: 2026-10-01
 - Branch: `feature/115-ci-telemetry` from `origin/develop` (`f3d5f4c`)
 - Scope: P0 Actions run/job/step evidence and consumer-local diagnostics, P1 bounded OTLP/Prometheus/Grafana observability, and the P3 on-demand benchmark workflow/CLI/Agent Skill contract.
 - Context: policy [PR #116](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/pull/116) and three-run comparator [PR #117](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/pull/117) are merged. OnMaruBE [PR #544](https://github.com/YRootLab/OnMaru-backend/pull/544) pinned the new Toolkit SHA; release gate wiring remains [OnMaruBE #543](https://github.com/YRootLab/OnMaru-backend/issues/543).
-- Done: v1 Actions run/job/step timeline normalizer and quality contract with bounded input, partial pagination, retry attempt identity, and explicit unavailable metrics.
+- Done: v1 Actions run/job/step timeline normalizer and quality contract with bounded input, partial pagination, retry attempt identity, and explicit unavailable metrics. #115 was promoted to the Root control plane with nine native Sub-Issues and one cross-owner Agent Toolkit issue.
 - Verification: `bash scripts/verify_toolkit.sh` passed (168 tests, 4 workflow security checks). Actual OnMaruBE Module Benchmark run `36822854010` normalized 19 jobs without quality issues; observed job window was 712s and sum job work 2158s. These are distinct from workflow elapsed time.
 - Design: general CI observation does not repeat tests. Pipeline improvements use an explicit feature-vs-develop experiment with three valid runs per side. P3 provides the consumer workflow, Toolkit CLI, and Agent Toolkit `ci-benchmark-experiment` skill.
-- Next: have the user review the written P3 design, then produce the implementation plan and create the consumer/Agent Toolkit implementation Issues. Do not push directly to `develop`.
+- Issue graph: Wave 0 [Toolkit #118](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/118) and [#119](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/119); Wave 1 #120; Wave 2 #121 and OnMaruBE #554; Wave 3 OnMaruBE #555; Wave 4 #122; Wave 5 OnMaruBE #556 and Agent Toolkit #58. Existing OnMaruBE #543 is the independent P2 release track.
+- Next: begin Wave 0 in separate worktrees. Continue the current evidence code under #118 and build the local observability stack under #119. Do not push directly to `develop`.
 
 ## Follow-up work
 
