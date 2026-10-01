@@ -3,7 +3,7 @@
 상태: Proposed
 소유: `YRootLab/OnMaru-backend-ci-toolkit`
 Consumer: `YRootLab/OnMaru-backend`
-관련: ADR-0003, OnMaruBE #255
+관련: ADR-0003, ADR-0005, Toolkit #113, Toolkit #115, OnMaruBE #543
 
 ## 1. 문제와 목표
 
@@ -16,7 +16,7 @@ OnMaruBE의 현재 CI는 Gradle multi-module 및 FastAPI 검증을 단일 `verif
 - runtime service에 toolkit을 import하지 않고 OnMaruBE GitHub Actions가 version-pinned toolkit workflow를 호출한다.
 - 새로운 backend module은 catalog 한 항목 추가만으로 affected calculation, parallel test, evidence, report에 포함된다.
 - 각 결과는 commit SHA, run ID, module ID, command, artifact URI, config hash까지 추적 가능하다.
-- PR은 빠른 affected 검증, develop/nightly는 전체 evidence, release는 반복 benchmark와 release gate를 수행한다.
+- 일반 PR과 push는 기존 필수 CI를 한 번 실행하고 그 결과를 관측한다. 추가 반복 benchmark는 파이프라인 개선 실험이나 release 판정에서만 명시적으로 수행한다.
 - benchmark failure, artifact missing, 조건 불일치, 표본 부족은 성능 regression으로 오인하지 않는다.
 
 ## 2. 소유권과 경계
@@ -124,14 +124,34 @@ Workflow는 `detect → matrix test → aggregate → verify fan-in` 구조다. 
 
 | Mode | 대상 | 반복 | 판정 | 보존 |
 |---|---|---:|---|---|
-| PR | affected + reverse dependencies | 1 | 10% 초과는 warning | GitHub Artifact |
+| PR 기본 경로 | 기존 필수 CI 결과 관측 | 추가 반복 없음 | 성능 판정 없음 | GitHub Artifact + telemetry |
 | develop | full suite | 1 | evidence only | GitHub Artifact |
 | nightly | full suite | 3 | flaky/변동성 분석 | GitHub Artifact |
+| experiment | 고정한 develop baseline과 feature candidate | baseline/candidate 각 3 | 중앙값·범위·실패율 비교 | GitHub Artifact |
 | release | full suite, 동일 조건 | baseline/candidate 각 3 | 중앙값 15% 초과는 approval hold | GitHub Release asset + manifest |
 
 Comparability key는 `repository`, `suite`, `catalog/config hash`, runner image, Java/Python version, cache state, database fixture, CPU/memory profile, dependency mode를 포함한다. 하나라도 불일치하면 `inconclusive`다. `commit SHA`는 각 표본의 불변 실행 신원으로 보존한다. 개선 실험에서는 애플리케이션 source SHA를 같게 유지하고 의도적으로 바꾼 workflow/cache 설정을 기록한다. 서로 다른 release의 SHA를 서로 같아야 하는 조건으로 사용하지 않는다.
 
 `develop` artifact는 빠른 비교를 위한 단기 baseline이다. release 비교의 durable source of truth는 tag, commit SHA, image digest, config hash, report checksum을 포함한 GitHub Release asset이다.
+
+### 상시 관측과 반복 실험의 분리
+
+상시 관측은 기존 `CI`, `Module Benchmark`, release workflow가 이미 실행한 결과를 완료 후 수집한다. 이 경로는 테스트를 다시 실행하지 않으며 OpenTelemetry metric·trace와 consumer-local 진단 증적만 만든다. 모든 PR에 baseline/candidate 3회 측정을 추가하지 않는다.
+
+반복 실험은 CI, test, CD 구조·cache·runner·matrix·배포 절차를 의도적으로 바꿨을 때만 `Pipeline Benchmark Experiment`의 `workflow_dispatch`로 시작한다. label과 PR 생성은 실행 조건이 아니다. v1은 같은 OnMaruBE 저장소의 커밋된 `feature/*` 브랜치만 허용하며 fork와 dirty working tree는 대상에서 제외한다.
+
+실험 시작 시 `origin/develop`을 resolve한 immutable SHA를 baseline으로, 현재 feature branch의 immutable SHA를 candidate로 고정한다. 두 SHA의 suite, config hash, runner, dependency, cache와 fixture 조건을 manifest에 기록하고 각각 서로 다른 성공 실행 3회를 요구한다. 실패·취소·누락과 조건 불일치는 `inconclusive`이며 자동으로 추가 실행하거나 성공 표본으로 바꾸지 않는다.
+
+Consumer workflow의 수동 입력 계약은 다음과 같다.
+
+| Input | 값 | 규칙 |
+|---|---|---|
+| `candidate_ref` | feature branch 또는 40자 SHA | 실행 전에 immutable SHA로 resolve |
+| `baseline_ref` | 기본값 `develop` | 실행 전에 remote SHA로 resolve |
+| `scope` | `ci`, `test`, `cd` | v1은 `ci`와 `test`; `cd`는 격리된 staging 준비 후 활성화 |
+| `reason` | 변경 목적 요약 | manifest와 보고서에 기록, metric label에는 사용하지 않음 |
+
+반복 횟수 3은 사용자가 바꾸는 workflow input이 아니라 비교 정책 버전의 일부다. 측정 도중 branch가 이동해도 고정된 SHA를 계속 사용한다. 실험 결과는 일반 PR required check나 자동 배포 조건으로 등록하지 않고 검토 증거로 제공한다.
 
 ## 6. Evidence와 분석
 
@@ -177,14 +197,35 @@ Recommendation engine은 critical path, cache miss, resource contention, flaky m
 - release mode는 baseline/candidate 각 3회 valid run, baseline comparability, image digest/smoke evidence를 검증한다. 개별 값과 변동폭을 보고하며 세 표본만으로 통계적 유의성을 주장하지 않는다.
 - workflow security test는 fork PR secret isolation과 최소 권한을 검증한다.
 
-## 9. 범위 밖
+## 9. 구현 우선순위
+
+| 우선순위 | 제목 | 구현 결과 |
+|---|---|---|
+| P0 | 신뢰 가능한 CI 시간선·증적과 consumer-local 진단 | run/attempt와 모든 job·step을 수집하고 결측·부분·중복·실패를 명시한다. 확인할 수 없는 workflow 시간, queue와 DAG critical path를 추정하지 않는다. |
+| P1 | OpenTelemetry·Prometheus 호환 저장소·Grafana 관측 | 증적을 bounded low-cardinality OTLP metric과 사후 재구성 trace로 변환한다. 로컬 Collector·Prometheus·Tempo·Grafana와 운영 Grafana Cloud Mimir·Tempo 경로에서 대시보드와 원본 실행 왕복을 검증한다. |
+| P2 | release 3회 비교와 승인 판정 연결 | baseline/candidate 각 3회 비교, 15% approval hold, manifest 보존을 OnMaruBE release workflow에 연결하고 기존 release gate와 이중 판정을 제거한다. |
+| P3 | 필요할 때만 실행하는 Pipeline Benchmark Experiment CLI·Agent Skill | 수동 workflow, Toolkit CLI와 `ci-benchmark-experiment` skill로 feature SHA와 develop SHA의 3회 비교를 실행·대기·요약한다. 일반 PR·push·CD에 반복 측정을 추가하지 않는다. |
+
+P0와 P1이 먼저다. P3는 P0 증적과 P1 관측 경로를 소비하며 자체 측정 정의를 만들지 않는다.
+
+### P3 CLI·Agent Skill 계약
+
+Toolkit CLI는 dry-run에서 repository, baseline SHA, candidate SHA, scope, 반복 정책과 예상 workflow dispatch payload를 출력한다. 실제 실행에서는 `gh workflow run`으로 consumer-owned workflow를 시작하고 run ID를 수집한 뒤 완료를 기다려 manifest와 비교 보고서 링크를 반환한다.
+
+Agent Toolkit의 `ci-benchmark-experiment` skill은 CLI를 감싸며 저장소·`gh` 인증·remote·branch·clean tree·workflow 존재를 먼저 검사한다. 기본 기준선은 `origin/develop`, 기본 후보는 현재 `feature/*` HEAD다. 사용자가 명시한 다른 SHA를 조용히 대체하지 않는다. 실행 결과는 baseline/candidate 개별 값, 중앙값, 범위, 제외 사유, verdict, Actions·manifest·Grafana 링크를 보여 준다.
+
+CLI와 skill은 관측 자격 증명을 읽거나 출력하지 않는다. Grafana Cloud 전송은 OnMaruBE의 신뢰된 후처리 workflow가 담당한다. skill 테스트는 기본적으로 dry-run과 fixture를 사용하며 실제 runner 비용을 발생시키는 dispatch는 명시적 실행 요청에서만 허용한다.
+
+## 10. 범위 밖
 
 - OnMaru application runtime에 toolkit library import
 - external object storage provisioning
 - automatic production promotion/rollback
 - benchmark 결과만으로 application source/test를 자동 수정
+- PR label만으로 유료 반복 benchmark 자동 실행
+- 격리된 staging이 준비되기 전 production 대상 CD 부하·배포 benchmark
 
-## 10. Open-source References
+## 11. Open-source References
 
 - GitHub reusable workflows: https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows
 - Gradle GitHub Actions: https://github.com/gradle/actions/tree/main/setup-gradle
