@@ -96,6 +96,8 @@ PYTHONPATH=src python -m pipeline_toolkit.cli trend compare \
 
 ## 상세 계약과 개발 검증을 확인할 수 있습니다
 
+필요할 때만 develop과 feature SHA를 각각 세 번 비교하는 CLI는 [Pipeline Benchmark Experiment 사용법과 소비자 계약](docs/benchmark-experiment.md)에 설명합니다. 기본 동작은 dry-run이고, 실제 dispatch는 OnMaruBE #555/#556 완료 후 통합 검증으로 제한합니다.
+
 모듈별 병렬 실행의 입력·출력·안전 규칙은 [OnMaruBE parallel CI benchmark PRD](docs/prd/onmarube-parallel-ci-benchmark.md)에, release evidence의 보관·비교 규칙은 [release trend comparison PRD](docs/prd/release-trend-comparison.md)에 정리되어 있습니다. OnMaru-backend 담당자가 실제 rollout을 수행할 때는 [병렬 CI Toolkit rollout 구현 프롬프트](docs/to-be/onmaru-backend-parallel-ci-toolkit-rollout-prompt.md)를 사용합니다.
 
 Cloud credential 없이 OTLP metric·trace와 Grafana datasource 연결을 확인하려면 [로컬 관측 스택 가이드](docs/telemetry/local-stack.md)를 사용합니다. 고정 버전 Compose, localhost 포트, bounded disposable storage와 fixture/query smoke 도구를 제공합니다.

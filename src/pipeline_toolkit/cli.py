@@ -10,6 +10,7 @@ from pipeline_toolkit import __version__
 from pipeline_toolkit.catalog import load_catalog, plan_affected_modules
 from pipeline_toolkit.compare.statistics import compare_releases
 from pipeline_toolkit.contracts import validate_document
+from pipeline_toolkit.experiments.cli import add_parser as add_experiment_parser, execute as execute_experiment
 from pipeline_toolkit.report_bundle.ai import generate_openai_markdown, validate_ai_markdown
 from pipeline_toolkit.report_bundle.model import ReportBundleValidationError, load_report_bundle
 from pipeline_toolkit.report_bundle.render import (
@@ -27,6 +28,7 @@ from pipeline_toolkit.trend.render import render_html as render_trend_html, rend
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pipeline-toolkit")
     sub = parser.add_subparsers(dest="command", required=True)
+    add_experiment_parser(sub)
     sub.add_parser("version")
     validate = sub.add_parser("validate"); validate.add_argument("--document", required=True); validate.add_argument("--schema", required=True)
     compare = sub.add_parser("compare"); compare.add_argument("--baseline"); compare.add_argument("--candidate", required=True)
@@ -58,6 +60,8 @@ def _parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.command == "experiment":
+        return execute_experiment(args)
     if args.command == "version":
         print(json.dumps({"version": __version__}, sort_keys=True)); return 0
     if args.command == "validate":
