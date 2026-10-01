@@ -86,11 +86,17 @@ services:
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      # Keep the image's bundled datasource plugins. Grafana 13 otherwise
+      # downloads updates into the bounded tmpfs and can unregister a plugin.
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_PLUGINS_PREINSTALL_AUTO_UPDATE: "false"
       GF_USERS_ALLOW_SIGN_UP: "false"
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
       - ./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/local.yaml:ro
+      - ./grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/local.yaml:ro
+      - ../dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     depends_on:
       prometheus:

@@ -102,6 +102,8 @@ PYTHONPATH=src python -m pipeline_toolkit.cli trend compare \
 
 Cloud credential 없이 OTLP metric·trace와 Grafana datasource 연결을 확인하려면 [로컬 관측 스택 가이드](docs/telemetry/local-stack.md)를 사용합니다. 고정 버전 Compose, localhost 포트, bounded disposable storage와 fixture/query smoke 도구를 제공합니다.
 
+[CI Grafana 대시보드](docs/telemetry/dashboard.md)는 workflow/job/module 시간, work·outcome·collection quality와 성공/실패 trace 탐색을 제공합니다. 실제 import/query smoke, 안전한 Actions·manifest 링크, exporter-local 가시성 공백과 telemetry 운영·비용 한도를 함께 설명합니다.
+
 Toolkit 자체를 검증하려면 다음 명령을 실행합니다.
 
 ```bash
