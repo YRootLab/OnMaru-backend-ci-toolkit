@@ -91,6 +91,16 @@ class ExportResult:
     acknowledged_batches: int
     total_batches: int
     ci_conclusion: str | None
+    attempted_batches: int = 0
+    terminal_partial_batches: int = 0
+
+    @property
+    def succeeded_batches(self):
+        return self.acknowledged_batches
+
+    @property
+    def pending_batches(self):
+        return self.total_batches - self.acknowledged_batches - self.terminal_partial_batches
 
 
 def _attributes(values):
@@ -188,7 +198,8 @@ class SQLiteReplayStore:
             if row:
                 if row[0] != plan:
                     return "plan_mismatch"
-                if row[3] in {"complete", "partial"}:
+                # Legacy export-level partial state can still have unsent batches.
+                if row[3] == "complete":
                     return row[3]
                 if row[1] and row[2] > self.clock():
                     return "busy"
@@ -299,12 +310,15 @@ def export_otlp(bundle: TelemetryBundle, config: ExportConfig, store: SQLiteRepl
     transports must honor the supplied timeout; no background worker outlives this
     call. Consumer code decides when to call this optional post-run operation.
     """
-    attempts, acknowledged, total = 0, 0, 0
+    attempts, acknowledged, total, attempted_batches, terminal_partial = 0, 0, 0, 0, 0
     claimed, key, owner = False, None, uuid.uuid4().hex
     deadline = clock() + config.total_timeout_seconds
 
     def result(status, reason=None):
-        return ExportResult(status, reason, attempts, acknowledged, total, bundle.ci_conclusion)
+        if terminal_partial and status in {"failed", "exported", "duplicate"}:
+            status, reason = "partial", reason or "receiver_partial_success"
+        return ExportResult(status, reason, attempts, acknowledged, total, bundle.ci_conclusion,
+                            attempted_batches, terminal_partial)
 
     try:
         try:
@@ -315,28 +329,27 @@ def export_otlp(bundle: TelemetryBundle, config: ExportConfig, store: SQLiteRepl
         key = hashlib.sha256((bundle.identity.key + ":" + config.endpoint.rstrip("/")).encode()).hexdigest()
         plan = hashlib.sha256(":".join(batch.key for batch in batches).encode()).hexdigest()
         claim = store.claim(key, plan, owner, config.total_timeout_seconds + 5)
+        claimed = claim == "claimed"
+        if claim in {"complete", "claimed", "busy"}:
+            checkpoints = {batch.key: store.batch_state(key, batch.key) for batch in batches}
+            acknowledged = sum(state == "accepted" for state in checkpoints.values())
+            terminal_partial = sum(state == "partial" for state in checkpoints.values())
         if claim == "complete":
-            acknowledged = total
             return result("duplicate")
-        if claim == "partial":
-            return result("partial", "receiver_partial_success")
         if claim != "claimed":
             return result("busy" if claim == "busy" else "failed", "replay_" + claim)
-        claimed = True
         headers = dict(config.headers)
         headers.update({"Content-Type": "application/json", "Accept": "application/json"})
         for batch in batches:
-            if store.batch_state(key, batch.key) == "accepted":
-                acknowledged += 1
-                continue
-            if store.batch_state(key, batch.key) == "partial":
-                store.finish(key, owner, "partial")
-                return result("partial", "receiver_partial_success")
+            if checkpoints[batch.key] in {"accepted", "partial"}:
+                continue  # Terminal for this batch only; deliver the remaining plan.
             for attempt in range(config.max_attempts):
                 remaining = deadline - clock()
                 if remaining <= 0:
                     return result("failed", "deadline_exceeded")
                 response = None
+                if attempt == 0:
+                    attempted_batches += 1
                 attempts += 1
                 try:
                     response = transport(config.endpoint.rstrip("/") + "/v1/" + batch.signal, batch.body, headers, min(config.timeout_seconds, remaining))
@@ -351,8 +364,8 @@ def export_otlp(bundle: TelemetryBundle, config: ExportConfig, store: SQLiteRepl
                     break
                 if state == "partial":
                     store.record_batch(key, batch.key, owner, "partial")
-                    store.finish(key, owner, "partial")
-                    return result("partial", reason)
+                    terminal_partial += 1
+                    break
                 if deadline <= clock():
                     return result("failed", "deadline_exceeded")
                 if state != "retry" or attempt + 1 == config.max_attempts:

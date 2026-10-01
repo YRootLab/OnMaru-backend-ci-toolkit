@@ -117,6 +117,8 @@ def test_timeout_and_retryable_http_use_bounded_backoff_and_identical_payload(tm
         return exporter.HttpResponse(200, b"{}")
     result = exporter.export_otlp(transformed(), config(timeout_seconds=2), exporter.SQLiteReplayStore(tmp_path / "replay.sqlite"), transport=transport, sleep=sleeps.append, jitter=lambda: 0)
     assert result.status == "exported" and result.request_attempts == 4
+    assert result.attempted_batches == result.succeeded_batches == result.total_batches == 2
+    assert result.terminal_partial_batches == result.pending_batches == 0
     assert sleeps == [0.25, 2.0]
     assert bodies[0] == bodies[1] == bodies[2]
     assert "do-not-leak" not in repr(result)
@@ -130,19 +132,89 @@ def test_permanent_http_errors_are_not_retried_or_allowed_to_change_ci_verdict(t
     assert result.request_attempts == 1 and result.ci_conclusion == "cancelled"
 
 
-def test_partial_success_is_terminal_for_batch_and_never_replayed(tmp_path):
+def test_metrics_partial_success_still_delivers_traces_and_never_replays_terminal_batches(tmp_path):
     exporter = api()
     store = exporter.SQLiteReplayStore(tmp_path / "replay.sqlite")
     calls = []
     def partial(url, body, headers, timeout):
         calls.append(url)
-        return exporter.HttpResponse(200, b'{"partialSuccess":{"rejectedDataPoints":"1","errorMessage":"password=secret"}}')
+        return exporter.HttpResponse(200, b'{"partialSuccess":{"rejectedDataPoints":"1","errorMessage":"password=secret"}}' if url.endswith("metrics") else b"{}")
     first = exporter.export_otlp(transformed(), config(), store, transport=partial)
     second = exporter.export_otlp(transformed(), config(), store, transport=partial)
     assert first.status == second.status == "partial"
     assert first.reason == second.reason == "receiver_partial_success"
-    assert len(calls) == 1 and second.request_attempts == 0
+    assert calls == ["http://127.0.0.1:4318/v1/metrics", "http://127.0.0.1:4318/v1/traces"]
+    assert first.request_attempts == first.attempted_batches == 2
+    assert second.request_attempts == second.attempted_batches == 0
+    for result in (first, second):
+        assert result.total_batches == 2
+        assert result.acknowledged_batches == result.succeeded_batches == 1
+        assert result.terminal_partial_batches == 1 and result.pending_batches == 0
     assert "secret" not in repr(first)
+
+
+def test_partial_metric_batch_does_not_drop_other_metric_batches(tmp_path):
+    exporter = api()
+    settings = config(max_items=1)
+    planned = exporter.build_batches(transformed(), settings)
+    sent = []
+    def transport(url, body, headers, timeout):
+        sent.append((url, body))
+        return exporter.HttpResponse(200, b'{"partialSuccess":{"rejectedDataPoints":"1"}}' if len(sent) == 1 else b"{}")
+    result = exporter.export_otlp(transformed(), settings, exporter.SQLiteReplayStore(tmp_path / "replay.sqlite"), transport=transport)
+    assert len(sent) == len(planned) > 2
+    assert result.status == "partial" and result.terminal_partial_batches == 1
+    assert result.succeeded_batches == len(planned) - 1
+    assert result.attempted_batches == result.request_attempts == result.total_batches == len(planned)
+    assert result.pending_batches == 0
+
+
+def test_partial_metrics_with_failed_traces_replays_only_pending_traces(tmp_path):
+    exporter = api()
+    path = tmp_path / "replay.sqlite"
+    def first_transport(url, body, headers, timeout):
+        return exporter.HttpResponse(200, b'{"partialSuccess":{"rejectedDataPoints":"1"}}') if url.endswith("metrics") else exporter.HttpResponse(401, b"{}")
+    first = exporter.export_otlp(transformed(), config(), exporter.SQLiteReplayStore(path), transport=first_transport)
+    assert first.status == "partial" and first.reason == "http_401"
+    assert first.attempted_batches == 2 and first.succeeded_batches == 0
+    assert first.terminal_partial_batches == 1 and first.pending_batches == 1
+    def retry_transport(url, body, headers, timeout):
+        assert url.endswith("traces"), "a partially accepted metric batch must not replay"
+        return exporter.HttpResponse(200, b"{}")
+    resumed = exporter.export_otlp(transformed(), config(), exporter.SQLiteReplayStore(path), transport=retry_transport)
+    assert resumed.status == "partial" and resumed.reason == "receiver_partial_success"
+    assert resumed.request_attempts == resumed.attempted_batches == 1
+    assert resumed.succeeded_batches == resumed.terminal_partial_batches == 1
+    assert resumed.total_batches == 2 and resumed.pending_batches == 0
+
+
+def test_replay_resumes_legacy_export_level_partial_state(tmp_path):
+    exporter = api()
+    class LegacyStore(exporter.SQLiteReplayStore):
+        def finish(self, key, owner, state):
+            super().finish(key, owner, "partial")
+    path = tmp_path / "replay.sqlite"
+    first = exporter.export_otlp(transformed(), config(), LegacyStore(path), transport=lambda url, *args: exporter.HttpResponse(200, b'{"partialSuccess":{"rejectedDataPoints":"1"}}') if url.endswith("metrics") else exporter.HttpResponse(401, b"{}"))
+    assert first.status == "partial" and first.pending_batches == 1
+    sent = []
+    def transport(url, *args):
+        sent.append(url)
+        return exporter.HttpResponse(200, b"{}")
+    resumed = exporter.export_otlp(transformed(), config(), exporter.SQLiteReplayStore(path), transport=transport)
+    assert sent == ["http://127.0.0.1:4318/v1/traces"]
+    assert resumed.status == "partial" and resumed.pending_batches == 0
+
+
+def test_checkpoint_read_failure_releases_the_newly_acquired_lease(tmp_path):
+    exporter = api()
+    class BrokenReader(exporter.SQLiteReplayStore):
+        def batch_state(self, key, batch):
+            raise OSError("unreadable checkpoint")
+    path = tmp_path / "replay.sqlite"
+    first = exporter.export_otlp(transformed(), config(), BrokenReader(path), transport=lambda *args: pytest.fail("unreadable checkpoint sent"))
+    assert first.reason == "export_state_error"
+    resumed = exporter.export_otlp(transformed(), config(), exporter.SQLiteReplayStore(path), transport=lambda *args: exporter.HttpResponse(200, b"{}"))
+    assert resumed.status == "exported" and resumed.succeeded_batches == 2
 
 
 def test_export_deadline_and_attempt_limit_stop_retries(tmp_path):
@@ -234,18 +306,33 @@ def test_store_failure_never_leaks_exception_text_or_changes_ci_verdict(tmp_path
     assert result.ci_conclusion == "cancelled" and result.request_attempts == 0
 
 
-def test_partial_ack_survives_interruption_before_export_finalization(tmp_path):
+def test_partial_ack_survives_crash_and_remaining_traces_resume_after_lease_expiry(tmp_path):
     exporter = api()
-    class InterruptedStore(exporter.SQLiteReplayStore):
-        def finish(self, key, owner, state):
+    class CrashingStore(exporter.SQLiteReplayStore):
+        def record_batch(self, key, batch, owner, state):
+            super().record_batch(key, batch, owner, state)
             if state == "partial":
-                raise OSError("secret")
-            super().finish(key, owner, state)
+                raise SystemExit("simulated process loss after durable partial checkpoint")
+        def finish(self, key, owner, state):
+            pass  # A lost process cannot release its lease.
     path = tmp_path / "replay.sqlite"
-    first = exporter.export_otlp(transformed(), config(), InterruptedStore(path), transport=lambda *args: exporter.HttpResponse(200, b'{"partialSuccess":{"rejectedDataPoints":"1"}}'))
-    assert first.status == "failed"
-    second = exporter.export_otlp(transformed(), config(), exporter.SQLiteReplayStore(path), transport=lambda *args: pytest.fail("partially acknowledged batch resent"))
-    assert second.status == "partial"
+    now = [100.0]
+    with pytest.raises(SystemExit):
+        exporter.export_otlp(transformed(), config(), CrashingStore(path, clock=lambda: now[0]), transport=lambda *args: exporter.HttpResponse(200, b'{"partialSuccess":{"rejectedDataPoints":"1"}}'))
+    replay_store = exporter.SQLiteReplayStore(path, clock=lambda: now[0])
+    busy = exporter.export_otlp(transformed(), config(), replay_store, transport=lambda *args: pytest.fail("active lease sent"))
+    assert busy.status == "busy" and busy.request_attempts == 0
+    now[0] = 136.0
+    sent = []
+    def transport(url, body, headers, timeout):
+        sent.append(url)
+        assert url.endswith("traces")
+        return exporter.HttpResponse(200, b"{}")
+    resumed = exporter.export_otlp(transformed(), config(), replay_store, transport=transport)
+    assert resumed.status == "partial" and resumed.terminal_partial_batches == 1
+    assert resumed.succeeded_batches == 1 and resumed.total_batches == 2
+    assert resumed.request_attempts == resumed.attempted_batches == 1
+    assert resumed.pending_batches == 0 and len(sent) == 1
 
 
 def test_http_transport_deadline_stops_a_trickling_response():
