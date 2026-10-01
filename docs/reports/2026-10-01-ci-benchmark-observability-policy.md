@@ -13,7 +13,7 @@ OnMaruBE가 CI 실행·필수 검사·실패 진단의 소유권을 유지하고
 | OnMaruBE의 일반 CI와 module benchmark caller가 별도로 존재한다. | OnMaruBE `.github/workflows/ci.yml`, `.github/workflows/module-benchmark.yml` | 관측 연계 후의 실행 시간과 비용 |
 | Toolkit module workflow는 명령별 `/usr/bin/time` 결과를 artifact로 만들며 최장 명령 시간을 `critical_path_seconds`로 반환한다. | Toolkit `.github/workflows/module-benchmark.yml` | 실제 workflow DAG critical path와 runner 대기 시간 |
 | OnMaruBE는 Grafana Cloud를 서비스 관측 백엔드로 결정했고 Spring API 계측과 Grafana 정의 파일을 갖고 있다. | OnMaruBE ADR-0009, `observability/grafana/` | CI 대시보드의 staging import 및 실제 데이터 표시 |
-| 작업 시작 시 release 비교 문서와 비교 코드는 유효 표본 5회를 요구했다. Toolkit PR #117이 비교 코드를 3회로 변경했다. | 변경 전 ADR-0003·병렬 CI PRD, Toolkit PR #117 | 새 Toolkit SHA를 consumer에 고정한 실행 결과 |
+| 작업 시작 시 release 비교 문서와 비교 코드는 유효 표본 5회를 요구했다. Toolkit PR #117이 비교 코드를 3회로 변경했고 OnMaruBE PR #544가 Toolkit SHA를 고정했다. | 변경 전 ADR-0003·병렬 CI PRD, Toolkit PR #117, OnMaruBE PR #544 | release workflow에서 실제 3회 판정을 연결한 결과 |
 
 ## 두 저장소와 관측 서비스의 책임
 
@@ -59,9 +59,9 @@ OnMaruBE의 필수 `verify`는 자체 테스트 결과만으로 결정된다. �
 - 개선 실험은 application source와 테스트 범위를 고정하고 workflow/cache 정책만 의도적으로 바꾼다. Release 간 비교는 서로 다른 SHA·image digest를 **각각의 불변 신원**으로 기록하며, 환경·suite·config·runner·cache 조건의 호환성을 검사한다. 서로 다른 release SHA 자체를 불일치 사유로 취급하지 않는다.
 - cold cache와 warm cache를 섞지 않는다. CI 개발자 대기 시간, 전체 runner 작업량, 실패율을 함께 판단한다. 더 짧은 모듈 명령 시간만으로 구조 변경을 채택하지 않는다.
 
-이 3회 정책은 기존 5회 정책을 변경한다. [Toolkit PR #117](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/pull/117)이 `compare_module_benchmarks` 코드를 3회 기준으로 변경해 `develop`에 병합됐다. **OnMaruBE가 새 불변 Toolkit SHA를 고정하고 실제 실행을 검증하기 전에는 consumer CI에 새 3회 판정이 적용됐다고 표시하지 않는다.**
+이 3회 정책은 기존 5회 정책을 변경한다. [Toolkit PR #117](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/pull/117)이 `compare_module_benchmarks` 코드를 3회 기준으로 변경했고 [OnMaruBE PR #544](https://github.com/YRootLab/OnMaru-backend/pull/544)가 새 불변 Toolkit SHA를 고정해 caller 실행을 검증했다. 다만 현재 module benchmark aggregate는 성공 실행도 `inconclusive`로 반환하므로, **release workflow가 baseline/candidate 각 3회를 수집하고 comparator를 호출하기 전에는 실제 release 판정이 적용됐다고 표시하지 않는다.**
 
-Consumer 적용은 [OnMaruBE #542 — Toolkit SHA 고정과 caller 검증](https://github.com/YRootLab/OnMaru-backend/issues/542)에서 추적한다.
+Toolkit SHA 고정과 caller 검증은 [OnMaruBE #542](https://github.com/YRootLab/OnMaru-backend/issues/542)에서 완료했다. 실제 release 3회 판정 연결은 [OnMaruBE #543](https://github.com/YRootLab/OnMaru-backend/issues/543)에서 추적한다.
 
 ## 대시보드·부하 시험·보고서
 
@@ -71,11 +71,20 @@ Consumer 적용은 [OnMaruBE #542 — Toolkit SHA 고정과 caller 검증](https
 
 보고서는 사실·추론·미확정을 구분하고, 비교 가능한 표본만으로 delta를 제시한다. Prometheus 쿼리 결과만으로 release gate를 재계산하지 않으며, manifest의 판정과 Grafana 추세가 다르면 데이터 품질 문제로 조사한다.
 
+## 상시 관측과 반복 benchmark 실행 정책
+
+모든 일반 PR과 push에서는 기존 필수 CI를 한 번 실행하고 그 실행 결과만 후처리 관측한다. OpenTelemetry 전송을 위해 테스트를 다시 실행하지 않으며 baseline/candidate 3회 비교도 자동으로 추가하지 않는다.
+
+CI, test 또는 CD 파이프라인 자체를 개선할 때는 별도 `Pipeline Benchmark Experiment`를 명시적으로 실행한다. 실행 시점의 remote `develop` SHA와 커밋된 `feature/*` SHA를 고정하고 각각 성공 표본 3회를 측정한다. PR label은 주 실행 인터페이스로 사용하지 않는다. v1의 CD 실험은 운영을 대상으로 하지 않으며 격리된 staging이 준비될 때까지 비활성화한다.
+
+P3에서 Toolkit CLI와 Agent Toolkit의 `ci-benchmark-experiment` skill이 이 수동 workflow의 dry-run, dispatch, 대기와 결과 요약을 제공한다. CLI와 skill은 관측 secret을 취급하지 않고, 일반 PR required check 또는 자동 배포 gate를 추가하지 않는다. 세부 계약은 [병렬 CI benchmark PRD](../prd/onmarube-parallel-ci-benchmark.md)에 기록한다.
+
 ## 실행 순서와 수용 기준
 
 1. **정책과 계약:** 이 보고서, ADR, PRD의 3회 기준을 일치시키고 Toolkit 비교 코드와 OnMaruBE caller의 변경 Issue를 분리한다.
 2. **정확성:** [Toolkit #115](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/115)에서 GitHub run·job·step 수집, 누락·재실행·중복 처리와 consumer-local 실패 보고를 fixture와 실제 Actions 실행으로 검증한다.
 3. **관측:** 같은 Issue의 관리형 Prometheus 메트릭·CI trace를 shadow 모드로 전송하고, 원본 manifest와 대시보드의 값·링크·보존 한계를 대조한다. 수집 실패는 필수 CI와 독립적이어야 한다.
 4. **최적화:** 그다음 [OnMaruBE #525](https://github.com/YRootLab/OnMaru-backend/issues/525)의 affected module·Gradle 구조 개선과 build cache·configuration cache 템플릿을 동일 범위의 전후 3회 측정으로 평가한다. `setup-java`의 Gradle 의존성 캐시를 task output cache나 configuration cache hit로 잘못 해석하지 않는다.
+5. **P3 실행 편의:** 정확한 증적과 관측 경로가 검증된 뒤 전용 workflow·Toolkit CLI·Agent Skill로 필요할 때만 3회 실험을 시작하고 결과를 회수한다.
 
 관련 근거: [GitHub workflow jobs API](https://docs.github.com/en/rest/actions/workflow-jobs), [Grafana Cloud의 OTLP·Mimir 매핑](https://grafana.com/docs/grafana-cloud/send-data/otlp/otlp-format-considerations/), [Gradle build cache와 configuration cache의 차이](https://docs.gradle.org/current/userguide/configuration_cache.html).
