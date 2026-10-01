@@ -14,7 +14,7 @@ python3 scripts/local_observability_smoke.py
 
 The health command checks Collector's health extension, Prometheus and Tempo readiness, Grafana's database, and the provisioned datasource links. Full smoke sends OTLP/HTTP JSON with one cumulative counter and one sampled trace. It waits for the counter value `1`, the fixture span queried by its fresh trace ID, and the matching Prometheus exemplar. Success prints JSON with `status: passed`, `trace_id`, and `trace_url`. HTTP 200 with OTLP rejected spans/data points, an empty query result or a missing exemplar is a failure. Nonzero exit status makes the tool suitable for optional integration CI.
 
-`--timeout 60` controls the retry budget for each readiness/query phase. Individual HTTP requests have a three-second timeout. `--collector`, `--otlp`, `--prometheus`, `--tempo`, and `--grafana` accept localhost HTTP origins when testing a Compose port override; remote destinations and credential-bearing URLs are rejected. The fixture uses a constant service name and fresh trace IDs in exemplars/spans, rather than high-cardinality metric labels.
+`--timeout 60` controls the retry budget for each readiness/query phase. Individual HTTP requests have a three-second timeout. `--collector`, `--otlp`, `--prometheus`, `--tempo`, and `--grafana` accept localhost HTTP origins when testing a Compose port override; remote destinations and credential-bearing URLs are rejected at both CLI and HTTP request boundaries. The client disables OS/environment proxies and rejects HTTP redirects (301/302/303/307/308) before resolving or contacting their destination, including for OTLP POST requests. `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, their lowercase forms and `NO_PROXY` cannot route fixtures outside localhost. The fixture uses a constant service name and fresh trace IDs in exemplars/spans, rather than high-cardinality metric labels.
 
 ## Ports and Grafana queries
 
@@ -44,7 +44,32 @@ curl --fail 'http://127.0.0.1:3000/api/datasources/uid/local-tempo'
 
 ## Resource limits and lifecycle
 
-Pinned upstream images are Collector Contrib `0.162.0`, Prometheus `v3.15.0`, Tempo `2.10.8`, Grafana `13.2.3`, and BusyBox `1.37.0-musl`. Collector's upstream release publishes architecture-specific tags, so BuildKit selects `0.162.0-arm64` or `0.162.0-amd64` using `TARGETARCH`. Tempo uses the maintained 2.10 patch line with its single-binary ingester/compactor configuration. Collector and Tempo use local Dockerfiles that copy a static BusyBox binary into the upstream image so their healthchecks can execute an actual HTTP probe. Image/configuration updates must repeat Compose startup and signal/query smoke checks.
+Every upstream image retains a human-readable version tag and an immutable `sha256` digest. Prometheus/Grafana in Compose and BusyBox/Tempo Dockerfile build arguments pin multi-platform manifest indexes so Docker selects the matching platform. Collector publishes separate architecture manifests; its Dockerfile locks both bases and BuildKit selects the `collector-arm64` or `collector-amd64` stage using `TARGETARCH`. Supported local platforms are Linux ARM64 and AMD64 (including Docker Desktop's Linux engine).
+
+The following digests were verified against the upstream registry on 2026-10-01, including Linux ARM64/AMD64 entries for all indexes and the actual Collector image configuration architecture. Dockerfile image build arguments have immutable defaults; any explicit override should preserve `tag@sha256:digest` form.
+
+| Upstream tag | Manifest digest | Kind |
+| --- | --- | --- |
+| `busybox:1.37.0-musl` | `sha256:5cec3fc171c87218698e85a52af7087de727372aae264a787b8112901a5b0092` | Multi-platform index |
+| `otel/opentelemetry-collector-contrib:0.162.0-amd64` | `sha256:340885ab6f46822374f00c58c067396b53b8d612559842e8821585567579d9e3` | AMD64 manifest |
+| `otel/opentelemetry-collector-contrib:0.162.0-arm64` | `sha256:254638b0878b0ef56088f3d580bac163aa7131213c5f7eb6e0cc9d169805503f` | ARM64 manifest |
+| `prom/prometheus:v3.15.0` | `sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e` | Multi-platform index |
+| `grafana/tempo:2.10.8` | `sha256:f0561deb1c68ec44d6e6e7e4487f30106c4e5e768642077695b37958b105812a` | Multi-platform index |
+| `grafana/grafana:13.2.3` | `sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572` | Multi-platform index |
+
+Tempo uses the maintained 2.10 patch line with its single-binary ingester/compactor configuration. Collector and Tempo use local Dockerfiles that copy a static BusyBox binary into the upstream image so their healthchecks can execute an actual HTTP probe. Local output tags `toolkit-local-collector` and `toolkit-local-tempo` identify these builds; all their upstream inputs are locked.
+
+For an update, inspect the new registry manifest, retain its version tag, update the digest in Compose or the Dockerfile default, and check both platform entries. Do not replace an index digest with a single-platform digest for a multi-platform service. Then repeat pull/build, Compose startup and signal/query smoke checks:
+
+```bash
+docker buildx imagetools inspect busybox:1.37.0-musl
+docker buildx imagetools inspect otel/opentelemetry-collector-contrib:0.162.0-amd64
+docker buildx imagetools inspect otel/opentelemetry-collector-contrib:0.162.0-arm64
+docker compose -f observability/local/compose.yaml pull --ignore-buildable
+docker compose -f observability/local/compose.yaml build --pull
+docker compose -f observability/local/compose.yaml up -d --wait --wait-timeout 180
+python3 scripts/local_observability_smoke.py
+```
 
 | Service | Container memory cap | Data volume | Storage / retention bounds |
 | --- | --- | --- | --- |
@@ -87,6 +112,6 @@ python3 -m pytest -q tests/test_local_observability.py
 bash scripts/verify_toolkit.sh
 ```
 
-The canonical Toolkit verification discovers the configuration, OTLP payload, HTTP query, partial-success and localhost-only contracts automatically. It does not start Docker or contact cloud services. A separate opt-in integration job should run Compose `config`, startup with `--wait`, both smoke commands, and scoped `down --volumes` in its cleanup/finally step. A skipped Docker integration check is not evidence of live health or signal delivery.
+The canonical Toolkit verification discovers configuration, immutable upstream image inputs, OTLP payload, HTTP query, partial-success and localhost-only contracts automatically. Regression tests use local HTTP servers to prove GET/POST redirects never resolve/contact external hosts and proxy variables cannot redirect fixtures. It does not start Docker or contact cloud services. A separate opt-in integration job should run Compose `config`, startup with `--wait`, both smoke commands, and scoped `down --volumes` in its cleanup/finally step. A skipped Docker integration check is not evidence of live health or signal delivery.
 
 Configuration references: [Collector Prometheus exporter](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.162.0/exporter/prometheusexporter/README.md), [Tempo v2.10 configuration](https://grafana.com/docs/tempo/v2.10.x/configuration/), [Grafana datasource provisioning](https://grafana.com/docs/grafana/latest/administration/provisioning/), and [Prometheus storage retention](https://prometheus.io/docs/prometheus/latest/storage/).

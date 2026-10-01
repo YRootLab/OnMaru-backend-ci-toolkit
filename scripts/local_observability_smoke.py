@@ -12,13 +12,23 @@ import sys
 import time
 from urllib.error import URLError
 from urllib.parse import urlencode, urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
+
+
+class RejectRedirects(HTTPRedirectHandler):
+    """Fail before parsing, resolving or contacting any redirect destination."""
+
+    def reject(self, req, response, code, message, headers):
+        response.close()
+        raise ValueError(f"HTTP redirect {code} is forbidden for localhost smoke requests")
+
+    http_error_301 = http_error_302 = http_error_303 = http_error_307 = http_error_308 = reject
 
 
 def local_url(value):
     parsed = urlsplit(value)
     if (parsed.scheme != "http" or parsed.hostname not in {"localhost", "127.0.0.1", "::1"}
-            or parsed.username or parsed.password or parsed.query or parsed.fragment
+            or parsed.username is not None or parsed.password is not None or parsed.query or parsed.fragment
             or parsed.path not in {"", "/"}):
         raise ValueError("URLs must be unauthenticated HTTP localhost origins")
     return value.rstrip("/")
@@ -32,11 +42,15 @@ def positive_timeout(value):
 
 
 def request(url, payload=None, timeout=3, decode_json=True):
+    parsed = urlsplit(url)
+    local_url(parsed._replace(path="", query="", fragment="").geturl())
     body = None if payload is None else json.dumps(payload).encode()
     headers = {"Accept": "application/json"}
     if body is not None:
         headers["Content-Type"] = "application/json"
-    with urlopen(Request(url, data=body, headers=headers), timeout=timeout) as response:
+    # Explicit handlers also bypass urllib's global opener and OS/env proxies.
+    opener = build_opener(ProxyHandler({}), RejectRedirects())
+    with opener.open(Request(url, data=body, headers=headers), timeout=timeout) as response:
         content = response.read()
     return json.loads(content) if decode_json and content else {}
 

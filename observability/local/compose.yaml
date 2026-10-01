@@ -38,7 +38,7 @@ services:
 
   prometheus:
     <<: *runtime
-    image: prom/prometheus:v3.15.0
+    image: prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
     mem_limit: 256m
     command:
       - --config.file=/etc/prometheus/prometheus.yaml
@@ -74,7 +74,7 @@ services:
 
   grafana:
     <<: *runtime
-    image: grafana/grafana:13.2.3
+    image: grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572
     mem_limit: 256m
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"

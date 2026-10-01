@@ -3,8 +3,12 @@ import importlib.util
 import json
 from pathlib import Path
 import re
+import socket
+import subprocess
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
+from contextlib import contextmanager
 
 import pytest
 import yaml
@@ -24,7 +28,7 @@ def test_compose_confines_ports_and_bounds_disposable_storage():
     services = compose["services"]
     assert set(services) == {"collector", "prometheus", "tempo", "grafana"}
     for service in services.values():
-        assert re.search(r":v?\d+\.\d+\.\d+$", service["image"])
+        assert re.search(r":v?\d+\.\d+\.\d+(?:@sha256:[a-f0-9]{64})?$", service["image"])
         assert service["healthcheck"]["test"][0] == "CMD"
         assert service["mem_limit"]
         assert service["logging"]["options"]["max-size"] == "5m"
@@ -47,6 +51,41 @@ def test_compose_confines_ports_and_bounds_disposable_storage():
     assert grafana_env["GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION"] == "true"
     # Explore needs Editor in current OSS Grafana; datasource edits still need Admin.
     assert grafana_env["GF_AUTH_ANONYMOUS_ORG_ROLE"] == "Editor"
+
+
+def test_all_upstream_images_are_digest_pinned_for_both_supported_architectures():
+    services = config("compose.yaml")["services"]
+    pinned = re.compile(r"[a-z0-9/.-]+:v?\d+\.\d+\.\d+(?:-musl|-amd64|-arm64)?@sha256:[a-f0-9]{64}$")
+    for name in ("prometheus", "grafana"):
+        assert pinned.fullmatch(services[name]["image"]), f"{name} lacks an immutable digest"
+    for name in ("collector", "tempo"):
+        assert all(pinned.fullmatch(value) for value in services[name]["build"].get("args", {}).values())
+    for filename in ("Dockerfile.collector", "Dockerfile.tempo"):
+        lines = (LOCAL / filename).read_text().splitlines()
+        args = dict(re.findall(r"^ARG ([A-Z0-9_]+)=(\S+)$", "\n".join(lines), re.MULTILINE))
+        assert args and all(pinned.fullmatch(image) for image in args.values())
+        stages = {}
+        used_args = set()
+        for line in lines:
+            match = re.fullmatch(r"FROM (\S+)(?: AS (\S+))?", line)
+            if not match:
+                continue
+            reference, stage = match.groups()
+            if reference.startswith("${") and reference.endswith("}"):
+                assert reference[2:-1] in args, f"unlocked base argument: {reference}"
+                used_args.add(reference[2:-1])
+                image = args[reference[2:-1]]
+            else:
+                assert reference == "collector-${TARGETARCH}"
+                assert set(stages) >= {"collector-amd64", "collector-arm64"}
+                continue
+            if stage:
+                stages[stage] = image
+        if filename == "Dockerfile.collector":
+            assert ":0.162.0-amd64@" in stages["collector-amd64"]
+            assert ":0.162.0-arm64@" in stages["collector-arm64"]
+        assert "busybox:1.37.0-musl@" in stages["probe"]
+        assert set(args) == used_args, "digest pins must be consumed by FROM, not orphan metadata"
 
 
 def test_otlp_signals_reach_scrape_and_trace_backends():
@@ -158,7 +197,8 @@ def test_smoke_rejects_otlp_partial_success(smoke):
 
 
 def test_smoke_rejects_nonlocal_and_nonfinite_configuration(smoke):
-    for url in ["https://remote.example", "http://0.0.0.0:4318", "http://user:password@localhost:4318"]:
+    for url in ["https://remote.example", "http://0.0.0.0:4318", "http://user:password@localhost:4318",
+                "http://@localhost:4318", "http://:@localhost:4318"]:
         with pytest.raises(ValueError, match="localhost"):
             smoke.local_url(url)
     for timeout in [0, -1, float("inf"), float("nan")]:
@@ -223,3 +263,83 @@ def test_smoke_cli_checks_provisioning_and_delivers_both_signals(smoke, capsys):
         server.shutdown()
         thread.join()
         server.server_close()
+
+
+@contextmanager
+def http_server(handler):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}"
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+@pytest.mark.parametrize("payload", [None, {"fixture": "must-stay-local"}])
+def test_smoke_never_resolves_or_contacts_external_redirects(smoke, monkeypatch, status, payload):
+    attempted_hosts = []
+    actual_resolver = socket.getaddrinfo
+
+    def guard_external_resolution(host, *args, **kwargs):
+        attempted_hosts.append(host)
+        assert host in {"127.0.0.1", "localhost", "::1"}, "attempted external resolution/contact"
+        return actual_resolver(host, *args, **kwargs)
+
+    class Redirect(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(status)
+            self.send_header("Location", "http://must-not-resolve.invalid/receive")
+            self.end_headers()
+
+        do_POST = do_GET
+
+        def log_message(self, *args):
+            pass
+
+    monkeypatch.setattr(socket, "getaddrinfo", guard_external_resolution)
+    for name in ("http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"):
+        monkeypatch.delenv(name, raising=False)
+    with http_server(Redirect) as url:
+        with pytest.raises(ValueError, match="redirect"):
+            smoke.request(url, payload, timeout=1)
+    assert attempted_hosts and set(attempted_hosts) <= {"127.0.0.1", "localhost", "::1"}
+
+
+def test_smoke_ignores_proxy_environment_and_contacts_local_server_directly(smoke, monkeypatch):
+    contacted = []
+
+    class Direct(BaseHTTPRequestHandler):
+        destination = "local"
+
+        def do_POST(self):
+            contacted.append(self.destination)
+            body = json.dumps({"destination": self.destination}).encode()
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    class Proxy(Direct):
+        destination = "proxy"
+
+    with http_server(Direct) as direct, http_server(Proxy) as proxy:
+        for name in ("http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"):
+            monkeypatch.setenv(name, proxy)
+        for name in ("no_proxy", "NO_PROXY"):
+            monkeypatch.setenv(name, "")
+        # Fresh interpreter avoids urllib's previously cached default opener.
+        result = subprocess.run([
+            sys.executable, "-c",
+            "import json, runpy, sys; module = runpy.run_path(sys.argv[1]); "
+            "print(json.dumps(module['request'](sys.argv[2], {'fixture': 'local'}, timeout=1)))",
+            str(ROOT / "scripts/local_observability_smoke.py"), direct + "/v1/metrics",
+        ], capture_output=True, text=True, timeout=3)
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout) == {"destination": "local"}
+    assert contacted == ["local"]
