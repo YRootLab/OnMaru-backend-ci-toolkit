@@ -11,7 +11,7 @@ import zlib
 
 import pytest
 
-from pipeline_toolkit.experiments.collect import _manifest
+from pipeline_toolkit.experiments.collect import _manifest, _manifest_bytes
 from pipeline_toolkit.experiments.contract import ExperimentError, MAX_BYTES
 from pipeline_toolkit.experiments.github import BoundedProcess
 
@@ -42,11 +42,110 @@ def test_local_zip_header_must_match_central_header(offset, value):
         collect(raw)
 
 
-def test_matching_data_descriptor_flags_are_rejected():
+def test_descriptor_flag_without_descriptor_is_rejected():
     raw = archive()
     central = raw.index(b'PK\x01\x02')
     struct.pack_into('<H', raw, 6, 8)
     struct.pack_into('<H', raw, central + 8, 8)
+    with pytest.raises(ExperimentError):
+        collect(raw)
+
+
+def streaming_archive(data=b'{}', *, signed=True, method=zipfile.ZIP_DEFLATED):
+    # A real non-seekable standard-library archiver produces the same bit-3,
+    # zero-local-sizes, signed-descriptor layout as the Actions archiver stream.
+    class Stream(io.BytesIO):
+        def seek(self, *args):
+            raise OSError('non-seekable upload stream')
+
+    output = Stream()
+    with zipfile.ZipFile(output, 'w', compression=method) as zipped:
+        zipped.writestr('experiment-manifest.json', data)
+    raw = bytearray(output.getvalue())
+    if not signed:
+        central = raw.index(b'PK\x01\x02')
+        assert raw[central - 16:central - 12] == b'PK\x07\x08'
+        del raw[central - 16:central - 12]
+        end = raw.index(b'PK\x05\x06')
+        struct.pack_into('<I', raw, end + 16, central - 4)
+    return raw
+
+
+@pytest.mark.parametrize('signed', [True, False])
+@pytest.mark.parametrize('method', [zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED])
+def test_standard_streaming_upload_zip_is_accepted(signed, method):
+    raw = streaming_archive(signed=signed, method=method)
+    assert struct.unpack_from('<H', raw, 6)[0] & 8
+    assert raw[14:26] == b'\0' * 12
+    assert collect(raw) == {}
+
+
+def test_unsigned_crc_matching_descriptor_signature_is_unambiguous():
+    # Literal 4-byte payload has CRC32 0x08074b50. Length, not scanning for
+    # that signature, must determine the unsigned descriptor representation.
+    payload = b'\xac\nz\xd5'
+    assert _manifest_bytes(streaming_archive(payload, signed=False)) == payload
+
+
+@pytest.mark.parametrize('signed', [True, False])
+def test_streaming_zip_at_uncompressed_limit_is_accepted(signed):
+    assert collect(streaming_archive(b'{}' + b' ' * (MAX_BYTES - 2), signed=signed)) == {}
+
+
+@pytest.mark.parametrize('trailer', [b'junk', b'PK\x07\x08', b'\xab\xae\x05\x00'])
+def test_extra_compressed_data_with_consistent_declared_sizes_is_rejected(trailer):
+    raw = streaming_archive()
+    central = raw.index(b'PK\x01\x02')
+    end = raw.index(b'PK\x05\x06')
+    descriptor = central - 16
+    compressed = struct.unpack_from('<I', raw, central + 20)[0]
+    raw[descriptor:descriptor] = trailer
+    delta = len(trailer)
+    struct.pack_into('<I', raw, central + delta + 20, compressed + delta)
+    struct.pack_into('<I', raw, descriptor + delta + 8, compressed + delta)
+    struct.pack_into('<I', raw, end + delta + 16, central + delta)
+    with pytest.raises(ExperimentError):
+        collect(raw)
+
+
+@pytest.mark.parametrize('signed', [True, False])
+@pytest.mark.parametrize('field', ['crc', 'compressed', 'size', 'local', 'central', 'trailing', 'overlap', 'concatenated', 'special'])
+def test_streaming_zip_forgery_and_ambiguous_layout_are_rejected(signed, field):
+    raw = streaming_archive(signed=signed)
+    central = raw.index(b'PK\x01\x02')
+    end = raw.index(b'PK\x05\x06')
+    descriptor = central - (16 if signed else 12)
+    values = descriptor + (4 if signed else 0)
+    if field in ('crc', 'compressed', 'size'):
+        struct.pack_into('<I', raw, values + {'crc': 0, 'compressed': 4, 'size': 8}[field], 1)
+    elif field == 'local': struct.pack_into('<I', raw, 22, 1)
+    elif field == 'central': struct.pack_into('<I', raw, central + 24, 1)
+    elif field == 'special': struct.pack_into('<I', raw, central + 38, 0o020600 << 16)
+    elif field == 'overlap': struct.pack_into('<I', raw, central + 20, 10000)
+    elif field == 'concatenated': raw.extend(streaming_archive())
+    elif field == 'trailing':
+        raw[central:central] = b'junk'
+        struct.pack_into('<I', raw, end + 4 + 16, central + 4)
+    with pytest.raises(ExperimentError):
+        collect(raw)
+
+
+@pytest.mark.parametrize('field', ['crc', 'size'])
+def test_descriptor_and_central_agreement_cannot_hide_actual_value_mismatch(field):
+    raw = streaming_archive()
+    central = raw.index(b'PK\x01\x02')
+    descriptor_values = central - 12
+    struct.pack_into('<I', raw, central + (16 if field == 'crc' else 24), 1)
+    struct.pack_into('<I', raw, descriptor_values + (0 if field == 'crc' else 8), 1)
+    with pytest.raises(ExperimentError):
+        collect(raw)
+
+
+@pytest.mark.parametrize('attributes', [0o020600 << 16, 0o060600 << 16, 0o010600 << 16, 0o040600 << 16, 0x10])
+def test_nonregular_archive_member_is_rejected(attributes):
+    raw = archive()
+    central = raw.index(b'PK\x01\x02')
+    struct.pack_into('<I', raw, central + 38, attributes)
     with pytest.raises(ExperimentError):
         collect(raw)
 
@@ -62,7 +161,8 @@ def test_central_filename_nul_cannot_hide_unexpected_name():
         collect(raw)
 
 
-def test_forged_small_sizes_cannot_hide_large_deflate_expansion():
+@pytest.mark.parametrize('descriptor', [None, 'signed', 'unsigned'])
+def test_forged_small_sizes_cannot_hide_large_deflate_expansion(descriptor):
     # Generate a 64 MiB stream with only a 64 KiB working block. Do not
     # allocate the expanded adversarial payload even in the fixture.
     compressor = zlib.compressobj(wbits=-15)
@@ -73,13 +173,16 @@ def test_forged_small_sizes_cannot_hide_large_deflate_expansion():
     compressed = b''.join(pieces) + compressor.flush()
     name = b'experiment-manifest.json'
     crc = binascii.crc32(b'{}')
-    local = struct.pack('<IHHHHHIIIHH', 0x04034b50, 20, 0, 8, 0, 0, crc, len(compressed), 2, len(name), 0) + name
-    central = struct.pack('<I6H3I5H2I', 0x02014b50, 20, 20, 0, 8, 0, 0, crc, len(compressed), 2, len(name), 0, 0, 0, 0, 0, 0) + name
-    end = struct.pack('<I4H2IH', 0x06054b50, 0, 0, 1, 1, len(central), len(local) + len(compressed), 0)
+    flags = 8 if descriptor else 0
+    local_values = (0, 0, 0) if descriptor else (crc, len(compressed), 2)
+    local = struct.pack('<IHHHHHIIIHH', 0x04034b50, 20, flags, 8, 0, 0, *local_values, len(name), 0) + name
+    central = struct.pack('<I6H3I5H2I', 0x02014b50, 20, 20, flags, 8, 0, 0, crc, len(compressed), 2, len(name), 0, 0, 0, 0, 0, 0) + name
+    descriptor_bytes = ((b'PK\x07\x08' if descriptor == 'signed' else b'') + struct.pack('<III', crc, len(compressed), 2)) if descriptor else b''
+    end = struct.pack('<I4H2IH', 0x06054b50, 0, 0, 1, 1, len(central), len(local) + len(compressed) + len(descriptor_bytes), 0)
     tracemalloc.start()
     try:
         with pytest.raises(ExperimentError):
-            collect(local + compressed + central + end)
+            collect(local + compressed + descriptor_bytes + central + end)
         assert tracemalloc.get_traced_memory()[1] < 3 * MAX_BYTES
     finally:
         tracemalloc.stop()

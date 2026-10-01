@@ -27,18 +27,34 @@ def _manifest_bytes(raw):
             entries = archive.infolist()
             require(len(entries) == 1, "unsafe_manifest_archive")
             entry = entries[0]
-            require(entry.filename == entry.orig_filename == "experiment-manifest.json" and entry.header_offset == 0 and entry.file_size <= MAX_BYTES and entry.flag_bits & ~0x800 == 0 and entry.compress_type in (0, 8) and (entry.external_attr >> 16) & 0o170000 != 0o120000 and archive.start_dir == directory_offset, "unsafe_manifest_archive")
+            require(entry.filename == entry.orig_filename == "experiment-manifest.json" and entry.header_offset == 0 and entry.file_size <= MAX_BYTES and entry.flag_bits & ~0x808 == 0 and entry.compress_type in (0, 8) and (entry.external_attr >> 16) & 0o170000 in (0, 0o100000) and not entry.external_attr & 0x10 and archive.start_dir == directory_offset, "unsafe_manifest_archive")
             signature, version, flags, method, _, _, crc, compressed_size, size, name_size, extra_size = struct.unpack_from("<IHHHHHIIIHH", raw)
-            require(signature == 0x04034b50 and version <= 20 and (flags, method, crc, compressed_size, size) == (entry.flag_bits, entry.compress_type, entry.CRC, entry.compress_size, entry.file_size), "unsafe_manifest_archive")
+            require(signature == 0x04034b50 and version == entry.extract_version and version <= 20 and (flags, method) == (entry.flag_bits, entry.compress_type), "unsafe_manifest_archive")
+            central_values = (entry.CRC, entry.compress_size, entry.file_size)
+            require((crc, compressed_size, size) == ((0, 0, 0) if flags & 8 else central_values), "unsafe_manifest_archive")
             start = 30 + name_size + extra_size
-            require(raw[30:30 + name_size] == b"experiment-manifest.json" and start + compressed_size == directory_offset, "unsafe_manifest_archive")
+            data_end = start + entry.compress_size
+            require(raw[30:30 + name_size] == b"experiment-manifest.json" and start <= data_end <= directory_offset, "unsafe_manifest_archive")
+            if flags & 8:
+                # Locate by validated directory offsets, not a signature scan:
+                # compressed bytes and an unsigned CRC can contain PK\x07\x08.
+                descriptor_size = directory_offset - data_end
+                require(descriptor_size in (12, 16), "unsafe_manifest_archive")
+                descriptor_start = data_end
+                if descriptor_size == 16:
+                    require(raw[data_end:data_end + 4] == b"PK\x07\x08", "unsafe_manifest_archive")
+                    descriptor_start += 4
+                require(struct.unpack_from("<III", raw, descriptor_start) == central_values, "unsafe_manifest_archive")
+            else:
+                require(data_end == directory_offset, "unsafe_manifest_archive")
             # ZIP64 and extra fields carrying contradictory size claims are not
             # part of this deliberately narrow consumer archive contract.
             require(extra_size == 0 and not entry.extra, "unsafe_manifest_archive")
+            crc, compressed_size, size = central_values
         output = bytearray()
         inflater = zlib.decompressobj(-15) if method == 8 else None
-        for offset in range(start, directory_offset, 65536):
-            pending = raw[offset:min(offset + 65536, directory_offset)]
+        for offset in range(start, data_end, 65536):
+            pending = raw[offset:min(offset + 65536, data_end)]
             while pending:
                 chunk = inflater.decompress(pending, min(65536, MAX_BYTES - len(output) + 1)) if inflater else pending
                 require(len(output) + len(chunk) <= MAX_BYTES, "unsafe_manifest_archive")
