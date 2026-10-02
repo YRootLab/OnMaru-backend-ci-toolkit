@@ -213,6 +213,51 @@ def test_outage_range_timeout_names_the_missing_query(monkeypatch):
         module.verify_grafana_outage(queries, before=10, started_ms=1790945089127, timeout=0.01)
 
 
+def test_outage_range_rejects_success_after_deadline_and_uses_remaining_time(monkeypatch):
+    path = ROOT / "scripts/collector_outage_smoke.py"
+    sys.path.insert(0, str(ROOT / "scripts"))
+    spec = importlib.util.spec_from_file_location("collector_outage_range_deadline", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    clock = [0.0]
+    durations = iter((0.4, 0.4, 0.3))
+    request_timeouts = []
+    values = iter((11, 1, 1))
+
+    def range_response(*_args, timeout, **_kwargs):
+        request_timeouts.append(timeout)
+        clock[0] += next(durations)
+        return {"results": {"A": {"frames": [{"data": {"values": [[1790945104000], [next(values)]]}}]}}}
+
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(module, "request", range_response)
+    monkeypatch.setattr(module, "retry", lambda check, timeout: check(timeout))
+    queries = {key: {"query": key} for key in ("export_failed_spans", "export_queue_pressure", "export_in_flight")}
+
+    with pytest.raises(ValueError, match="export_in_flight"):
+        module.verify_grafana_outage(queries, before=10, started_ms=1790945089127, timeout=1)
+    assert request_timeouts == pytest.approx([1.0, 0.6, 0.2])
+
+
+@pytest.mark.parametrize("response", [
+    {"results": {"A": {"frames": []}}},
+    {"results": {"A": {"error": "bad query"}}},
+])
+def test_outage_range_frame_failure_names_the_query(monkeypatch, response):
+    path = ROOT / "scripts/collector_outage_smoke.py"
+    sys.path.insert(0, str(ROOT / "scripts"))
+    spec = importlib.util.spec_from_file_location("collector_outage_range_frame_error", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    monkeypatch.setattr(module, "request", lambda *_args, **_kwargs: response)
+    monkeypatch.setattr(module, "retry", lambda check, timeout: check(timeout))
+    queries = {key: {"query": key} for key in ("export_failed_spans", "export_queue_pressure", "export_in_flight")}
+
+    with pytest.raises(ValueError, match="export_failed_spans"):
+        module.verify_grafana_outage(queries, before=10, started_ms=1790945089127, timeout=1)
+
+
 def test_live_smoke_uses_real_success_failure_evidence_and_reserved_label_safe_transform():
     smoke = smoke_module()
     from pipeline_toolkit.telemetry import MetricPolicy, transform_actions_evidence
