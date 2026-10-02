@@ -13,7 +13,7 @@ import time
 from urllib.parse import urlencode
 
 from ci_dashboard_smoke import ROOT, validate_frames, validate_values
-from local_observability_smoke import request, retry, validate_otlp
+from local_observability_smoke import positive_timeout, request, retry, validate_otlp
 
 PROMETHEUS = "http://127.0.0.1:9090"
 GRAFANA = "http://127.0.0.1:3000"
@@ -34,6 +34,29 @@ def query_value(query, timeout=3):
     response = request(PROMETHEUS + "/api/v1/query?" + urlencode({"query": query}), timeout=timeout)
     validate_values(response, [])
     return sum(float(item["value"][1]) for item in response["data"]["result"])
+
+
+def verify_grafana_outage(queries, before, started_ms, timeout=55):
+    keys = ("export_failed_spans", "export_queue_pressure", "export_in_flight")
+    deadline = time.monotonic() + positive_timeout(timeout)
+
+    def observed_outage(_request_timeout):
+        for key in keys:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ValueError(f"Grafana outage range deadline exceeded for query key: {key}")
+            try:
+                response = request(GRAFANA + "/api/ds/query", {"from": str(started_ms - 1000), "to": str(time.time_ns() // 1_000_000), "queries": [{"refId": "A", "datasource": {"type": "prometheus", "uid": "local-prometheus"}, "expr": queries[key]["query"], "range": True, "intervalMs": 2000, "maxDataPoints": 1000}]}, timeout=min(3, remaining))
+                validate_frames(response, numeric=True)
+                values = [value for frame in response["results"]["A"]["frames"] for column in frame["data"]["values"][1:] for value in column if value is not None]
+            except (OSError, ValueError, KeyError) as error:
+                raise ValueError(f"Grafana outage range query failed for key {key}: {error}") from error
+            if time.monotonic() >= deadline:
+                raise ValueError(f"Grafana outage range deadline exceeded for query key: {key}")
+            if max(values) <= (before if key == "export_failed_spans" else 0):
+                raise ValueError(f"Grafana outage range is missing query key: {key}")
+
+    retry(observed_outage, timeout)
 
 
 def main(argv=None):
@@ -59,12 +82,7 @@ def main(argv=None):
             if peaks["export_failed_spans"] <= before or peaks["export_queue_pressure"] <= 0 or peaks["export_in_flight"] <= 0:
                 raise ValueError("Waiting for real failed attempts and queue/in-flight pressure")
         retry(observed_failure, 55)
-        for key in keys:
-            response = request(GRAFANA + "/api/ds/query", {"from": str(started_ms - 1000), "to": str(time.time_ns() // 1_000_000), "queries": [{"refId": "A", "datasource": {"type": "prometheus", "uid": "local-prometheus"}, "expr": queries[key]["query"], "range": True, "intervalMs": 2000, "maxDataPoints": 1000}]})
-            validate_frames(response, numeric=True)
-            values = [value for frame in response["results"]["A"]["frames"] for column in frame["data"]["values"][1:] for value in column if value is not None]
-            if max(values) <= (before if key == "export_failed_spans" else 0):
-                raise ValueError("Grafana did not display the induced exporter outage")
+        verify_grafana_outage(queries, before, started_ms)
     finally:
         # No resource deletion: restart only Tempo; tmpfs data is disposable.
         subprocess.run(COMPOSE + ["start", "tempo"], check=True, capture_output=True, timeout=20)
