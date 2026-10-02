@@ -1,0 +1,130 @@
+name: toolkit-local-observability
+
+x-runtime: &runtime
+  restart: "no"
+  logging:
+    driver: json-file
+    options:
+      max-size: 5m
+      max-file: "2"
+
+x-health: &health
+  interval: 5s
+  timeout: 3s
+  retries: 20
+  start_period: 15s
+
+services:
+  collector:
+    <<: *runtime
+    image: toolkit-local-collector:0.162.0
+    build:
+      context: .
+      dockerfile: Dockerfile.collector
+    command: ["--config=/etc/otelcol/config.yaml"]
+    mem_limit: 256m
+    ports:
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+      - "127.0.0.1:13133:13133"
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    depends_on:
+      tempo:
+        condition: service_healthy
+    healthcheck:
+      <<: *health
+      test: ["CMD", "/busybox", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:13133/"]
+
+  prometheus:
+    <<: *runtime
+    image: prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
+    mem_limit: 256m
+    command:
+      - --config.file=/etc/prometheus/prometheus.yaml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=1h
+      - --storage.tsdb.retention.size=128MB
+      - --enable-feature=exemplar-storage
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      <<: *health
+      test: ["CMD", "/bin/wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+
+  tempo:
+    <<: *runtime
+    image: toolkit-local-tempo:2.10.8
+    build:
+      context: .
+      dockerfile: Dockerfile.tempo
+    command: ["-config.file=/etc/tempo/config.yaml"]
+    mem_limit: 384m
+    ports:
+      - "127.0.0.1:3200:3200"
+    volumes:
+      - ./tempo.yaml:/etc/tempo/config.yaml:ro
+      - tempo-data:/var/tempo
+    healthcheck:
+      <<: *health
+      test: ["CMD", "/busybox", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3200/ready"]
+
+  grafana:
+    <<: *runtime
+    image: grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572
+    mem_limit: 256m
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      # Current OSS Grafana requires Editor for the fixture Explore queries.
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Editor
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_AUTH_BASIC_ENABLED: "false"
+      GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      # Keep the image's bundled datasource plugins. Grafana 13 otherwise
+      # downloads updates into the bounded tmpfs and can unregister a plugin.
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_PLUGINS_PREINSTALL_AUTO_UPDATE: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/local.yaml:ro
+      - ./grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/local.yaml:ro
+      - ../dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    healthcheck:
+      <<: *health
+      test: ["CMD", "/usr/bin/wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+
+# Linux-engine tmpfs volumes have hard size caps and intentionally lose data
+# when unmounted. Docker Desktop also uses a Linux engine for these mounts.
+volumes:
+  prometheus-data:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=256m,mode=1777
+  tempo-data:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=256m,mode=1777
+  grafana-data:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=64m,mode=1777

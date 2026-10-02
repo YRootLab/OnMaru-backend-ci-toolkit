@@ -1,0 +1,11 @@
+# Immutable defaults retain version tags for human review. BusyBox uses a
+# multi-platform index; Collector publishes separate architecture manifests.
+ARG BUSYBOX_IMAGE=busybox:1.37.0-musl@sha256:5cec3fc171c87218698e85a52af7087de727372aae264a787b8112901a5b0092
+ARG COLLECTOR_AMD64_IMAGE=otel/opentelemetry-collector-contrib:0.162.0-amd64@sha256:340885ab6f46822374f00c58c067396b53b8d612559842e8821585567579d9e3
+ARG COLLECTOR_ARM64_IMAGE=otel/opentelemetry-collector-contrib:0.162.0-arm64@sha256:254638b0878b0ef56088f3d580bac163aa7131213c5f7eb6e0cc9d169805503f
+FROM ${BUSYBOX_IMAGE} AS probe
+FROM ${COLLECTOR_AMD64_IMAGE} AS collector-amd64
+FROM ${COLLECTOR_ARM64_IMAGE} AS collector-arm64
+# BuildKit selects the matching locked base without mixing CPU architectures.
+FROM collector-${TARGETARCH}
+COPY --from=probe /bin/busybox /busybox

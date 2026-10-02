@@ -1809,8 +1809,8 @@ benchmark suite는 다음 실행 조건을 기록한다.
 
 ```yaml
 benchmark:
-  warmupRuns: 1
-  measuredRuns: 5
+  warmupRuns: 0
+  measuredRuns: 3
   cacheState: warm
   parallelism: 4
   failOnInsufficientEvidence: false
@@ -1819,6 +1819,7 @@ benchmark:
 - cold cache와 warm cache를 동일 baseline으로 섞지 않는다.
 - baseline과 candidate는 동일 runner image, architecture, resource limit을 우선 사용한다.
 - benchmark run 수와 제외된 run 수를 report에 표시한다.
+- 개선 실험과 release 비교는 baseline/candidate 각각 3회의 유효 성공 표본을 요구한다. 별도 warmup을 사용했다면 그 실행은 3회에 포함하지 않고 조건·제외 사유를 기록한다.
 - timeout, cancellation, runner outage는 성능 sample에서 제외하되 제외 사유를 보존한다.
 
 ## 비교 결과
@@ -2560,7 +2561,7 @@ Benchmark Evidence Store
 [ ] 동일 environment, runner, resource, cache 조건을 비교한다.
 [ ] baseline/candidate를 최소 3회 이상 유효하게 반복 실행할 수 있다.
 [ ] baseline과 candidate의 모든 BenchmarkRun ID를 Comparison에 저장한다.
-[ ] median, p95, absolute delta, relative delta, resource delta를 제공한다.
+[ ] median, absolute delta, relative delta, resource delta를 제공하고, p95는 표본이 충분할 때만 제공한다.
 [ ] sample 부족·환경 불일치·artifact 누락을 inconclusive로 표시한다.
 [ ] release tag, commit SHA, image digest, workflow run, raw artifact를 추적한다.
 [ ] release별 raw/normalized/report artifact를 immutable하게 저장한다.

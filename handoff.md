@@ -1,215 +1,47 @@
-# handoff.md
+# Handoff
 
-- **Date**: 2026-09-26 module benchmark output newline 수정 시작
-- **Branch**: `fix/99-module-output-newlines`
-- **Related Issue**: #99 (blocks OnMaru-backend #365 rollout)
-- **Scope**: aggregate embedded Python이 `GITHUB_OUTPUT`과 Markdown report에 literal `\\n`을 기록하는 결함을 실제 실행 회귀 테스트로 고친다. workflow topology·권한·artifact 계약은 유지한다.
-- **Plan**: `docs/superpowers/plans/2026-09-26-module-benchmark-output-newlines.md`
-- **Verification**: RED 집중 테스트 1 failed/4 passed (`GITHUB_OUTPUT`이 1줄); GREEN 집중 테스트 5 passed; `bash scripts/verify_toolkit.sh` 161 passed, 91% coverage, workflow security 4 workflows passed; `git diff --check` 및 `git diff --check 850dc82bc1a50e1321c406879f5e538d8795aba8 HEAD` passed.
-- **Touched files**: `.github/workflows/module-benchmark.yml`, `tests/test_module_benchmark_workflow.py`, `docs/superpowers/plans/2026-09-26-module-benchmark-output-newlines.md`, `handoff.md`.
-- **Status**: #99 구현과 로컬 검토 완료.
-- **Next**: 브랜치를 push하고 #99 PR을 `develop`에 연다. CI 결과를 확인해 통과한 경우에만 병합한 뒤 patch release와 immutable target SHA를 확인해 OnMaru-backend caller에 반영한다.
+Updated: 2026-10-02
 
-- **Date**: 2026-09-26 stories 로컬 전용 정책 전환
-- **Branch**: `chore/103-local-stories`
-- **Related Issue**: #103
-- **Scope**: `docs/stories/`와 그 학습 원고를 Git 추적에서만 제거하고 `.gitignore`로 전환한다. 로컬 story 파일은 삭제하지 않으며 reports와 pipeline 검증은 story 원고에 의존하지 않게 한다.
-- **Verification**: `git check-ignore`로 story 원고가 ignore되는 것을 확인하고, `bash scripts/verify_toolkit.sh`를 실행한다.
+## Current work
 
-- **Date**: 2026-09-26 CI Toolkit 학습 시리즈를 stories로 분리
-- **Branch**: `docs/100-move-ci-stories`
-- **Related Issue**: #100
-- **Scope**: 학습 목적의 3편 blog 원고를 관측 보고서와 구분되는 `docs/stories/`로 옮기고, 양쪽 index와 계약 테스트 경로를 갱신한다.
-- **Verification**: 이동 전 경로를 가리키는 문서 계약은 실패해야 하며, 새 stories 경로와 전체 toolkit 검증을 확인한다.
+- Release promotion in progress for [Toolkit #115](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/115): branch `release/115-ci-telemetry` from verified `origin/develop` merge `8b4e5b0`, targeting `master` through a protected PR. Release Please remains the sole version/tag/changelog/GitHub Release authority, so no semantic version is preselected on this branch.
+- Integrated Toolkit work is ready on `feature/115-ci-telemetry`: base `origin/develop` (`0f2be2c`), reviewed implementation commit `178c503`, integration [PR #124](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/pull/124). Issues #118-#122 are implemented, integrated, and independently reviewed with no remaining findings. Final canonical verification passed 527 tests at 93% coverage plus all 4 workflow-security checks; `git diff --check` is clean. The live disposable stack passed all 12 PromQL and 2 TraceQL dashboard queries, success/failure label assertions, replay suppression, and scoped cleanup. PR CI run `36952803110` passed before the merge-log reconciliation commit.
+- Toolkit #91 organization-policy blocker was removed on 2026-10-02: `YRootLab` and this repository now report `default_workflow_permissions=write` and `can_approve_pull_request_reviews=true`. Release Please run `36173276474`, attempt 2, then passed its full verification and release-action step; it correctly created no PR because the current `v0.1.2` master had zero unreleased commits. The active `Git Flow protected branches` Ruleset remains unchanged and requires PRs plus the up-to-date `ci` check for `master`, `develop`, and `release/*`, with deletion/non-fast-forward changes prohibited and no bypass actors. OnMaruBE #543/#554/#555/#556 and Agent Toolkit #58 remain open. The branch was pushed and PR #124 opened through the protected workflow; no Issue closure, consumer change, or branch-rule change was performed.
+- Final review hardening ready: [Toolkit #115](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/115), branch `fix/115-telemetry-hardening`, isolated worktree `.worktrees/fix-115-telemetry-hardening`. #120 maps normalized module `failed` to `failure` and rejects exit/status contradictions; incomplete nonzero executions remain failures. #118 diagnostic URLs now require the original canonical GitHub HTTPS run path and matching ID, without query/fragment/userinfo/controls. #121 live smoke verifies workflow/module success/failure labels, not just numeric outcomes. Integrated OTLP docs now record completed local backend/dashboard/outage API evidence while keeping Cloud and real consumer integration unverified. TDD RED: 22 failures; focused GREEN: 155 passed; full verification: 463 passed, 93% coverage, 4 workflow security checks; dashboard generator/diff checks passed. The stricter live module-label assertion remains for root-agent final smoke; this worktree started no Docker stack. No push, merge, Issue closure or consumer change.
+- #122/#115 P2 follow-up in `fix/115-experiment-hardening`: standard Actions/upload-artifact streaming ZIP data-descriptor compatibility without weakening bounded inflation, actual CRC/size verification or single-member layout validation. RED: 4 real non-seekable archiver descriptor cases and 5 nonregular-file cases; GREEN: signed/unsigned descriptors located at exact compressed-data/central-directory boundaries with zero local CRC/sizes. Includes actual-versus-forged central/descriptor agreement, overlap/trailing/concatenation, unsigned CRC equal to signature, exact 1 MiB valid output and signed/unsigned 64 MiB bombs below 3 MiB peak. Final fresh verification: 51 ZIP/process security tests, 180 focused tests, 498 full tests, 93% total coverage, 4 workflow security checks and clean `git diff --check` on Python 3.9.6. Live consumer producer/attestation isolation remains #555/#556; no dispatch, push, merge, Issue closure or external writes.
+- [#122](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/122)/[#115](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/115) final-review hardening: branch `fix/115-experiment-hardening`, isolated worktree `.worktrees/fix-115-experiment-hardening`. Strict TDD for bounded ZIP streaming, separately verified committed application/test identities, and exited-parent process-group cleanup. Security RED: six malicious ZIP cases and actual orphan heartbeat failed; GREEN: bounded 64 KiB inflation and unreaped-leader TERM/KILL cleanup. Further RED/GREEN covers central filename NUL hiding and unsafe SIGCHLD reaping. Source/comparability/replay RED 7 to GREEN, plus online signer/tree/test-plan spoof and missing-source regressions. Policy `/2` verifies exact manifest-byte GitHub attestation at the immutable baseline signer, authenticated committed Git tree and original test-plan Git blob/SHA-256; all six samples must share application tree/test scope, independently of differing workflow refs. Final fresh verification on Python 3.9.6: 143 focused and 461 full tests passed, 93% coverage, 4 workflow security checks, `git diff --check` clean. Consumer #555/#556 remain integration gates: trusted producer signing/isolation and actual archive compatibility are not claimed by the fake fixtures. No real dispatch, push, merge or Issue closure.
+- #121 review follow-up in `feature/121-dashboard`: actual Collector self-observability replaces the two static export-health notices. Five operational panels show failed spans/metric points, queue utilization (lag proxy), in-flight/retry requests and self-scrape health. Internal 8888 is Compose-network only; seven exporter metric families are allowlisted with a 128-sample scrape cap. Lazy failure-counter zero fallback requires a measured successful-send baseline and current self-scrape up; missing/down is never a blanket healthy zero. Pre-Collector Toolkit HTTP `ExportResult` and exact end-to-end lag remain a separate documented consumer-local boundary.
+- #121 follow-up verification: focused dashboard/local stack 32 passed, final full suite 434 passed, 93% coverage and 4 workflow security checks; generated dashboard, Compose config and diff checks pass. All 12 PromQL/2 TraceQL queries returned numeric/trace Grafana frames. Normal exporter states were 0 failed attempts, 0% queue, 0 in-flight and scrape up=1. Opt-in disposable Tempo outage sent 8,192 bounded synthetic spans, observed failed-span attempts 0→1,536 during polling (2,560 by restored snapshot), queue pressure 6.25% and in-flight 10; Grafana frames showed the outage. Tempo restoration drained queue/in-flight to 0, and the subsequent full dashboard smoke passed with success/failure traces `ba68272b87a9f8f03e5ef58908979d13` / `ac7886b6529410d752c1f391d1de7b80`. This proves Collector downstream observations, not pre-Collector HTTP delivery or unique lost spans.
+- #121 follow-up cleanup: removed the disposable project's four containers, network and three tmpfs volumes; project `ps -a` and labeled-volume listing are empty. Only synthetic fixture telemetry was discarded. No push, merge, Issue closure or external dispatch.
+- #120 Prometheus integration correction: the root-agent #119 Collector check found metric label `job` colliding with the exporter target label. Metric model/transform now emit `ci_job`, trace attributes stay unchanged, reserved target/resource/generated labels are rejected, and serialized-payload tests cover the boundary. [#121 query contract](docs/telemetry/otlp-export.md#prometheus-query-contract-for-121) uses `ci_job`. Fresh focused suite: 77 passed; full verification: 286 passed, 92% coverage, 4 workflow security checks. One unrelated 50ms command-runner timeout test initially missed startup output; isolated rerun and full rerun passed without changes to that code. Backend cross-check of this correction remains with root-agent integration; no #119/#121 worktree edits.
+- Local implementation: [Toolkit #121](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/121), branch `feature/121-dashboard`, isolated worktree `.worktrees/issue-121-dashboard`. Test-first Grafana dashboard/provisioning and canonical query contracts consume the reviewed #119 stack and #120 OTLP signals. Verify success/failure drilldowns and local import/query behavior, document budgets and exporter-local visibility gaps; no Cloud credentials, consumer workflow, push, merge or Issue closure.
+- #121 verification: initial RED 7 missing dashboard/query/provisioning/generator tests; added RED/GREEN source-fixture, actual Tempo field-name and Grafana background-plugin regressions. Focused dashboard/local stack 30 passed; full `bash scripts/verify_toolkit.sh` 432 passed, 93% coverage and 4 workflow security checks on Python 3.9.6; `git diff --check` and Compose config passed. Canonical generated dashboard is provisioned in Grafana 13.2.3; all 7 PromQL/2 TraceQL queries return nonempty Grafana frames with source-derived 8s window/job and 6s step/module values, both outcome traces and duplicate replay suppression. Browser UI automation surfaces were unavailable; validation is provisioning/query/link-field API evidence, not a screenshot.
+- #121 integration corrections: includes #120 `ci_job` fix (`506f8f9`, cherry-picked as `f05ecc6`); actual Tempo spans-frame fields are `traceIdHidden` and `cicd.pipeline.run.id`. Disabled Grafana background plugin preinstall/auto-update after live queries exposed tmpfs exhaustion and `plugin.notRegistered`; fixed image-bundled plugins work with 2 MiB/64 MiB Grafana storage. [Dashboard guide](docs/telemetry/dashboard.md) records operational versus enforced budgets, Cloud cost/limit checks, missing exporter-health metrics and manifest-artifact-list links (OTLP has a digest but no artifact ID). Synthetic fixtures do not verify real consumer artifact downloads; #554/#555 retain that responsibility.
+- #121 final live evidence: success trace `de6c64e23c35b875f6042cb8023511ea`, failure trace `81c41e9e84c76c9464a65c8ea70010bd`; nine Grafana queries passed on the final generated dashboard. Scoped Compose cleanup removed all four fixture containers, project network and three disposable volumes; project `ps -a` and labeled-volume listing are empty. No external GitHub dispatch, push, merge or Issue closure occurred.
+- Ready for review: [Toolkit #120](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/120), branch `feature/120-otlp`, isolated worktree `.worktrees/issue-120-otlp`. Strict red/green implementation of typed low-cardinality Actions-to-OTLP conversion, source-exact reconstructed spans, bounded HTTP export and durable SQLite replay checkpoints. Consumer triggers and dashboards remain outside this branch. [OTLP contract](docs/telemetry/otlp-export.md) documents label catalogs, result/timing mappings, limits, credentials and acknowledgement-based replay limitations.
+- #120 verification: focused suite 64 tests; full `bash scripts/verify_toolkit.sh` 273 tests, 92% coverage and 4 workflow security checks on Python 3.9.6. Review correction makes OTLP partial acceptance terminal per batch only: unrelated metrics/traces continue, crash/replay resumes pending batches, and aggregate partial status reports attempted/succeeded/terminal-partial/pending counts. Legacy export-level partial state resumes safely. Real localhost HTTP fixture verifies OTLP JSON requests and a trickling-response timeout. #119 is not on this branch; actual Collector/Prometheus/Tempo source cross-check remains for root-agent integration with the reviewed local stack. No claim of backend ingestion, exactly-once delivery, deployment or changed required CI verdict. No push/merge/Issue closure performed.
+- Implementation ready for review: [Toolkit #118](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/118), branch `feature/118-actions-evidence`, isolated worktree `.worktrees/issue-118-actions-evidence`. Attempt-specific pagination, bounded versioned module joins/digests, deterministic identity, duplicate quarantine and consumer-local diagnostics are implemented with test-first coverage. The producer emits attempt identity; legacy critical-path output is declared but empty and module maximum uses `longest_module_duration_seconds`. Workflow wall-clock and DAG critical path remain unavailable.
+- #118 verification: focused suite 55 tests; full `bash scripts/verify_toolkit.sh` 212 tests, 92% coverage and 4 workflow security checks on Python 3.9.6. Review follow-up adds expected detect-matrix coverage, current run/attempt/Toolkit identity validation and duplicate/stale quarantine to aggregate, plus explicit module status/exit diagnostics independent of job conclusions. Read-only OnMaruBE run `36822854010`, attempt 1: 19 jobs, 110 steps, complete timing quality, 712s observed window. No consumer raw responses committed. Consumer migration must stop coercing deprecated `critical_path_seconds` to a number and enforce ZIP/download/member bounds before passing JSON bytes; [contract](docs/telemetry/actions-timeline.md) documents the boundary. No push, merge, Issue closure or consumer changes performed.
+- Wave 0 local stack: [Toolkit #119](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/119), branch `feature/119-local-observability`. Implemented pinned localhost-only Collector/Prometheus/Tempo/Grafana, capped disposable tmpfs volumes, bidirectional datasource links, configuration contracts and fixture/query smoke. Guide: `docs/telemetry/local-stack.md`.
+- #119 verification: `bash scripts/verify_toolkit.sh` passed (188 tests, 91% coverage, 4 workflow security checks); 20 local contracts run without Docker. Compose `config --quiet`, immutable `pull --ignore-buildable` / `build --pull`, four container healthchecks, readiness/provisioning smoke and metric + trace + matching exemplar query smoke passed on Docker Desktop ARM64. Live smoke also passed with external proxy environment variables set. The AMD64 Collector image was separately built, inspected as `amd64/linux`, and executed under Docker emulation. Docker Desktop's stalled credential helper was bypassed with an isolated empty Docker config; no user credentials/configuration were changed. Temporary fixture containers/network/volumes are cleaned after verification; no push, merge or Issue closure was performed.
+- #119 review follow-up complete: every upstream image retains its version tag with a registry-verified immutable digest. Multi-platform indexes preserve ARM64/AMD64 selection; Collector locks both architecture manifests in BuildKit stages. Smoke HTTP requests validate localhost at the client boundary, reject redirects before destination resolution/contact and disable OS/environment proxies; regressions reproduce and prevent both egress paths.
+- Local implementation: [Toolkit #122](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/122), branch `feature/122-experiment-cli`, isolated worktree `.worktrees/issue-122-experiment-cli`. Build and verify dry-run, dispatch, collection and comparison contracts with fake GitHub subprocess fixtures. Live dispatch remains gated by OnMaruBE #555/#556; no integration run is authorized in this session.
+- #122 implementation: `experiment` defaults to dry-run; explicit dispatch requires both consumer integration Issues closed and rechecks remote refs before the single POST. Exact run/attempt and sample artifact checks, bounded collection, three-sample comparator replay, exclusions and linked JSON/Markdown summaries are implemented. Consumer artifact and correlation requirements are documented in `docs/benchmark-experiment.md`.
+- #122 TDD evidence: initial CLI contract suite was RED with 27 failures because `experiment` did not exist; the implementation went GREEN, then targeted RED/GREEN cycles covered malformed run metadata, NaN/overflow, different consumer sample workflows, credential URL redaction and missing/expired sample artifacts. Canonical fresh verification: Python 3.9.6, 256 tests passed, 93% total coverage, 4 workflow security checks, `git diff --check` passed. All 88 experiment cases use controlled/fake GitHub responses; no real dispatch occurred.
+- #122 review follow-up: harden original Grafana URL characters and dashboard path, render validated autolinks and fenced exclusion JSON, classify a zero baseline as inconclusive, and count authenticated execution failures independently of measurement eligibility. Regression RED: 27 failed / 1 passed; targeted GREEN: 28 passed. Final verification passed: 116 focused tests, 284 full tests, 93% coverage, 4 workflow security checks and `git diff --check`.
+- Issue: [Toolkit #115](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/115)
+- Branch: `feature/115-ci-telemetry` from `origin/develop` (`0f2be2c`), reviewed implementation commit `178c503`
+- Scope: P0 Actions run/job/step evidence and consumer-local diagnostics, P1 bounded OTLP/Prometheus/Grafana observability, and the P3 on-demand benchmark workflow/CLI/Agent Skill contract.
+- Context: policy [PR #116](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/pull/116) and three-run comparator [PR #117](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/pull/117) are merged. OnMaruBE [PR #544](https://github.com/YRootLab/OnMaru-backend/pull/544) pinned the new Toolkit SHA; release gate wiring remains [OnMaruBE #543](https://github.com/YRootLab/OnMaru-backend/issues/543).
+- Done: #118 Actions evidence, #119 local observability stack, #120 bounded OTLP export/replay, #121 provisioned dashboards, and #122 experiment CLI are implemented and integrated locally. #115 remains the Root control plane for external consumer and organization-policy gates.
+- Verification: `bash scripts/verify_toolkit.sh` passed 527 tests at 93% coverage with 4 workflow-security checks. The final live stack smoke passed all 12 PromQL and 2 TraceQL queries, success/failure source labels, replay suppression, and cleanup. Actual OnMaruBE Module Benchmark run `36822854010` normalized 19 jobs without quality issues; observed job window was 712s and sum job work 2158s. These are distinct from workflow elapsed time.
+- Design: general CI observation does not repeat tests. Pipeline improvements use an explicit feature-vs-develop experiment with three valid runs per side. P3 provides the consumer workflow, Toolkit CLI, and Agent Toolkit `ci-benchmark-experiment` skill.
+- Issue graph: Wave 0 [Toolkit #118](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/118) and [#119](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/119); Wave 1 #120; Wave 2 #121 and OnMaruBE #554; Wave 3 OnMaruBE #555; Wave 4 #122; Wave 5 OnMaruBE #556 and Agent Toolkit #58. Existing OnMaruBE #543 is the independent P2 release track.
+- Next: after external owners complete OnMaruBE #543/#554/#555/#556 and Agent Toolkit #58, run the trusted consumer integration and experiment gates. Push/open a PR into `develop` only when explicitly requested; never push directly to `develop`.
 
-- **Date**: 2026-09-26 OnMaru-backend CI Toolkit 3편 학습 시리즈 시작
-- **Branch**: `docs/97-onmaru-ci-toolkit-blog-series`
-- **Related Issue**: #97
-- **Scope**: GitHub Actions·CI/CD/test 기초와 runner 실행, reusable workflow·Git SHA·두 저장소 경계, fan-out/fan-in·shadow rollout·evidence/CD 추세를 소스 파일을 모르는 독자도 따라갈 수 있는 한국어 long-form 문서 세 편으로 작성한다.
-- **Verification**: RED `PYTHONPATH=src python3 -m pytest -q tests/test_onmaru_ci_toolkit_blog_series.py` (문서 없음으로 2 failed); 문서 계약과 전체 toolkit 검증을 수행한다.
+## Follow-up work
 
-- **Date**: 2026-09-26 OnMaru-backend 병렬 CI Toolkit rollout 프롬프트 시작
-- **Branch**: `docs/95-parallel-ci-rollout-prompt`
-- **Related Issue**: #95 (coordinates OnMaru-backend #364, #365, #366, #368, #374)
-- **Scope**: consumer 담당자가 최신 develop 기반 대체 PR, shadow rollout, final fan-in, 기준선 비교와 지속 evidence를 안전하게 수행하도록 복사 가능한 한국어 실행 프롬프트를 제공한다.
-- **Verification**: RED `PYTHONPATH=src python3 -m pytest -q tests/test_onmarube_parallel_ci_rollout_prompt.py` (프롬프트 없음으로 2 failed); focused 및 전체 toolkit 검증을 수행한다.
+- [OnMaruBE #543](https://github.com/YRootLab/OnMaru-backend/issues/543): connect the three-run release comparator and approval hold to the consumer release workflow.
+- [OnMaruBE #525](https://github.com/YRootLab/OnMaru-backend/issues/525): evaluate affected modules and Gradle cache changes with comparable before/after evidence after observability is in place.
 
-- **Date**: 2026-09-26 OnMaru-backend 병렬 CI/CD·기준선 운영 보고서 시작
-- **Branch**: `docs/93-onmarube-pipeline-report`
-- **Related Issue**: #93 (references OnMaru-backend #364, #365, #366, #368)
-- **Scope**: 실제 GitHub Actions 직렬 기준선 표본, 병렬 rollout의 현재·목표 상태, evidence/비교 한계와 운영 책임을 비개발자도 읽을 수 있는 한국어 보고서로 기록한다.
-- **Verification**: RED `PYTHONPATH=src python3 -m pytest -q tests/test_onmarube_pipeline_report.py` (보고서 없음으로 2 failed); 보고서 계약 테스트와 전체 toolkit 검증을 실행한다.
-
-- **Date**: 2026-09-26 Release Please bootstrap failure 수정 시작
-- **Branch**: `fix/87-release-please-bootstrap`
-- **Related Issue**: #87 (unblocks #84)
-- **Root cause**: master Release Please run 36157571570 ran `verify_toolkit.sh` without the Python/coverage dependencies that regular CI installs from `requirements-ci.txt`.
-- **Scope**: release workflow에 CI와 같은 Python bootstrap만 추가하고, setup → install → verify 순서를 contract test로 고정한다.
-- **Verification**: RED `PYTHONPATH=src python3 -m pytest -q tests/test_ci_hardening.py` (1 failed); GREEN focused 3 passed; `bash scripts/verify_toolkit.sh` (154 passed, 91% coverage, workflow security 4 workflows passed).
-
-- **Date**: 2026-09-26 develop 누적 Toolkit release 준비
-- **Branch**: `release/develop-sync`
-- **Related Issue**: #84
-- **Scope**: 검증된 develop 누적 변경을 release PR로 master에 승격하고, master의 Release Please 및 develop back-merge 상태를 확인한다. release version/tag는 Release Please가 결정한다.
-- **Verification**: release branch에서 `bash scripts/verify_toolkit.sh`, PR `ci`, master push 후 Release Please 상태를 순서대로 확인한다.
-
-- **Date**: 2026-09-26 Toolkit consumer adoption guide 시작
-- **Branch**: `docs/82-consumer-adoption-guide`
-- **Related Issue**: #82 (extends #31; coordinates OnMaruBE #390)
-- **Scope**: Toolkit reusable workflow·CLI와 consumer-owned serial baseline 수집/비교의 책임 경계, immutable SHA caller 예시, evidence 보관 원칙을 README에 기록한다. Consumer source, credential, runtime dependency, CI topology는 변경하지 않는다.
-- **Verification**: RED `PYTHONPATH=src python3 -m pytest -q tests/test_readme_adoption.py` (2 failed); GREEN focused 2 passed; `bash scripts/verify_toolkit.sh` (153 passed, 91% coverage, workflow security 4 workflows passed).
-
-- **Date**: 2026-09-25 reusable caller-event guard 수정 시작
-- **Branch**: `fix/80-reusable-caller-event`
-- **Related Issue**: #80
-- **Scope**: caller event와 무관하게 workflow_call 경로의 release trend benchmark가 실행되도록 contract guard를 제거하고 테스트한다.
-
-- **Date**: 2026-09-25 release trend end-to-end validation
-- **Branch**: `test/67-release-trend-e2e`
-- **Related Issue**: #67 (root #61)
-- **Scope**: Verify `previous`, explicit incompatible baseline, failed intermediate evidence, JSON/Markdown/HTML/Job Summary CLI formats, and the read-only reusable workflow convention as one lifecycle.
-- **Verification**: `PYTHONPATH=src python3 -m pytest -q tests/test_trend_e2e.py tests/test_trend_cli.py tests/test_trend_render.py` (4 passed); `bash scripts/verify_toolkit.sh` (148 passed, 91% coverage, workflow security passed).
-
-
-- **Date**: 2026-09-25 release trend comparison foundation
-- **Branch**: `docs/release-trend-comparison`
-- **Related Issue**: #62 (root #61)
-- **Scope**: Record the canonical immutable-manifest storage decision, release trend PRD, approved design, implementation plan, and validated six-issue execution graph. The graph opens #63 → #64 → (#65, #66 in parallel) → #67.
-- **Verification**: ADR Toolkit significance score 14/14 (`recommended`); `adr.py validate` checked 4 ADRs with no errors; generated ADR index; work graph validation reported 6 issues with zero errors/warnings; baseline toolkit tests passed (130 tests).
-
-
-- **Date**: 2026-09-25 report-bundle E2E and CI smoke
-- **Branch**: `test/59-report-bundle-e2e-smoke`
-- **Related Issue**: #59
-- **Scope**: Add a safe report-facts fixture, end-to-end dual-audience CLI test, and GitHub Actions smoke/artifact verification without an AI call or automatic git mutation.
-- **Verification**: `python3 -m pytest tests/test_cli.py -q` (7 passed); `bash scripts/verify_toolkit.sh` (130 passed, 90% coverage, workflow security passed); manual runner-equivalent smoke with `PYTHONPATH=src`.
-
-- **Date**: 2026-09-24 report bundle design
-- **Branch**: `docs/56-report-bundle-design`
-- **Related Issue**: #56
-- **Scope**: Define a single-input report bundle that creates deterministic developer and easy-reader drafts/prompts, with an opt-in AI adapter and strict `docs/reports` versus external inbox boundary.
-- **Verification**: design placeholder scan and `git diff --check` passed; implementation plan written at `docs/superpowers/plans/2026-09-24-report-bundle-implementation.md`.
-
-- **Date**: 2026-09-24 report publication boundary
-- **Branch**: `docs/54-publish-ci-observation-report`
-- **Related Issue**: #54
-- **Scope**: Publish the evidence-based OnMaru Backend CI observation report and its detailed-report prompt under `docs/reports`. Keep the easy, portfolio-oriented version outside the repository at `OnMaru/inbox/reports`.
-- **Verification**: pending `git diff --check` and `bash scripts/verify_toolkit.sh`.
-
-- **Date**: 2026-09-24 matrix concurrency repair
-- **Branch**: `fix/52-module-matrix-concurrency`
-- **Related Issue**: #52 (blocks OnMaruBE #365)
-- **Scope**: module-test concurrency key and its workflow contract test only
-- **Verification**: changing the contract from resource profile to module ID reproduced the failure; full toolkit verification required before merge
-
-- **Date**: 2026-09-24 toolkit repository-name migration
-- **Branch**: `docs/50-repository-name-migration`
-- **Related Issue**: #50 (unblocks OnMaruBE #365)
-- **Scope**: reusable workflow internal checkout, active workflow references, PRD/adoption documentation, and work-graph repository metadata only
-- **Verification**: contract test changed first and failed against the former checkout name; full toolkit verification is required before merge
-
-Current work:
-- Summary: Fix reusable benchmark checkout so a cross-repository caller explicitly supplies the immutable toolkit commit SHA instead of leaking its caller workflow SHA into toolkit checkout.
-- Issue/PR: #48 / PR pending
-- Branch: fix/48-caller-toolkit-ref
-
-Touched files:
-- `.github/workflows/module-benchmark.yml`, `tests/test_module_benchmark_workflow.py`, and this handoff entry only.
-
-Verification:
-- RED: `python3 -m pytest tests/test_module_benchmark_workflow.py -q` failed with the missing `toolkit_ref` input and missing `TOOLKIT_REF` validation environment contract.
-- GREEN: focused cross-repository workflow fixture suite passed (4 tests).
-- Full: pending `bash scripts/verify_toolkit.sh`.
-
-Next step:
-- Open a Korean #48 corrective PR into `develop`; do not merge it in this task. OnMaruBE #365 must pass the same immutable SHA through the new required input after this PR merges.
-
-Open risk or decision:
-- The reusable workflow rejects anything but a 40-character lowercase hexadecimal Git commit SHA before network checkout. It intentionally does not accept mutable branches or tags.
-
--
-- Summary: Add evidence-linked recommendations that can produce only a restricted, auditable draft-PR payload or an Issue-only payload.
-- Issue/PR: #36 / PR pending
-- Branch: feature/36-restricted-recommendations
-
-Touched files:
-- `src/pipeline_toolkit/recommendations/`, `tests/test_recommendations.py`, and this handoff entry only.
-
-Verification:
-- RED: `PYTHONPATH=src python3 -m pytest -q tests/test_recommendations.py` failed with `ModuleNotFoundError` because the recommendations contract did not exist.
-- GREEN: focused recommendation contract suite passed (13 tests).
-- Full: `bash scripts/verify_toolkit.sh` passed (86 tests, 92% coverage, workflow security verification).
-
-Next step:
-- Open a Korean #36 PR into `develop`; do not merge it in this task.
-
-Open risk or decision:
-- This package creates declarative payloads only. It never creates, approves, or merges an Issue or PR; all draft remediation requires human review.
-
-- Summary: Correct module benchmark comparability so every performance-eligible sample carries a typed environment/configuration identity.
-- Issue/PR: #44 / PR pending
-- Branch: fix/44-evidence-environment-identity
-
-Touched files:
-- `src/pipeline_toolkit/contracts/module_evidence.py`, `src/pipeline_toolkit/compare/module_benchmark.py`, `tests/test_module_evidence.py`, `tests/test_module_benchmark_comparison.py`, and this handoff entry only.
-
-Verification:
-- RED: focused tests failed because `EnvironmentIdentity` and `pipeline_toolkit.compare.module_benchmark` did not exist.
-- GREEN: focused environment-identity contract/comparison suite passed (16 tests).
-- Full: `bash scripts/verify_toolkit.sh` passed (69 tests, 91% coverage, workflow security verification).
-
-Next step:
-- Open a Korean #44 corrective PR into `develop`; do not merge it. #43 must rebase onto this contract before its blocked comparison/report work proceeds.
-
-Open risk or decision:
-- Environment identity is required only for complete successful evidence; failed or incomplete evidence remains valid but is never performance eligible.
-
-- Summary: Add deterministic `module-plan` CLI JSON output from the #33 catalog planner.
-- Issue/PR: #39 / PR pending
-- Branch: feature/39-cli-module-plan
-
-Touched files:
-- `src/pipeline_toolkit/cli.py`, `tests/test_cli_module_plan.py`, and this handoff entry only.
-
-Verification:
-- RED: `PYTHONPATH=src python3 -m pytest -q tests/test_cli_module_plan.py` failed because `module-plan` was not a recognized command.
-- GREEN: the focused subprocess contract suite passed (4 tests).
-- Full: `bash scripts/verify_toolkit.sh` passed (53 tests, 91% coverage, workflow security verification).
-
-Next step:
-- Open the #39 Korean PR into `develop`; do not merge it in this task.
-
-Open risk or decision:
-- Invalid catalogs return exit code 2 with diagnostics only on stderr; unavailable or unmapped diffs safely select the full suite.
-- Summary: Compare validated module benchmark samples and render PR warning/release approval-hold reports.
-- Issue/PR: #40 / pending
-- Branch: feature/40-module-benchmark-reporting
-- Verification: focused comparison tests (6 passed); `./scripts/verify_toolkit.sh` (60 passed, 92% coverage, workflow security passed).
-
-- Summary: Define typed module benchmark evidence manifest for comparison-ready provenance.
-- Issue/PR: #34 / pending
-- Branch: feature/34-module-evidence-manifest
-
-- Summary: Add installable CLI commands and non-root runtime image for consumer adoption.
-- Issue/PR: #25 / next PR pending
-- Branch: feature/issue-25-cli-runtime
-
-Touched files:
-- CLI entrypoint, validate/compare/report commands, console script, Docker runtime, and CLI tests
-
-Next step:
-- Merge the P1 CLI/runtime PR after CI.
-- Continue operational baseline documentation and dashboard/alert integration.
-
-Open risk or decision:
-- GitHub branch protection is not configured yet.
-- Full external tool execution is optional; collectors must preserve missing/invalid evidence explicitly.
-- GitHub disallows the PR author from approving their own PR; use an independent maintainer or configured bot identity.
-
-Ad hoc requests captured this session:
-- [x] Extend `scripts/verify_toolkit.sh` when the Python toolkit implementation lands.
-# Issue #35 — reusable module benchmark workflow
-
-- Branch: `feature/35-reusable-module-benchmark`
-- Scope owner: `.github/workflows/module-benchmark.yml`, its fixture test, and workflow security validation only.
-- Status: fixture contract, workflow security validation, and toolkit verification passed; ready for PR review.
+Historical implementation notes remain in Git history and the linked Issues/PRs; this file tracks the current handoff only.

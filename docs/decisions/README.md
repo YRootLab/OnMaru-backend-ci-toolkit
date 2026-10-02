@@ -9,6 +9,7 @@
 - [ADR-0002 — 파이프라인 벤치마크를 위한 버전 관리형 통합 증거 모델을 정의한다](0002-versioned-unified-evidence-model.md)
 - [ADR-0003 — Consumer-configured reusable workflow로 모듈별 병렬 CI benchmark를 제공한다](0003-consumer-configured-reusable-workflow.md)
 - [ADR-0004 — 버전별 벤치마크 증적 manifest를 이력 비교의 정본으로 사용한다](0004-versioned-benchmark-manifest-history.md)
+- [ADR-0005 — Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다](0005-consumer-owned-ci-observability.md)
 
 ## 태그별
 
@@ -16,14 +17,17 @@
 - [ADR-0002 — 파이프라인 벤치마크를 위한 버전 관리형 통합 증거 모델을 정의한다](0002-versioned-unified-evidence-model.md)
 - [ADR-0003 — Consumer-configured reusable workflow로 모듈별 병렬 CI benchmark를 제공한다](0003-consumer-configured-reusable-workflow.md)
 - [ADR-0004 — 버전별 벤치마크 증적 manifest를 이력 비교의 정본으로 사용한다](0004-versioned-benchmark-manifest-history.md)
+- [ADR-0005 — Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다](0005-consumer-owned-ci-observability.md)
 
 ### benchmark
 - [ADR-0002 — 파이프라인 벤치마크를 위한 버전 관리형 통합 증거 모델을 정의한다](0002-versioned-unified-evidence-model.md)
 - [ADR-0003 — Consumer-configured reusable workflow로 모듈별 병렬 CI benchmark를 제공한다](0003-consumer-configured-reusable-workflow.md)
 - [ADR-0004 — 버전별 벤치마크 증적 manifest를 이력 비교의 정본으로 사용한다](0004-versioned-benchmark-manifest-history.md)
+- [ADR-0005 — Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다](0005-consumer-owned-ci-observability.md)
 
 ### ci
 - [ADR-0003 — Consumer-configured reusable workflow로 모듈별 병렬 CI benchmark를 제공한다](0003-consumer-configured-reusable-workflow.md)
+- [ADR-0005 — Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다](0005-consumer-owned-ci-observability.md)
 
 ### github-actions
 - [ADR-0003 — Consumer-configured reusable workflow로 모듈별 병렬 CI benchmark를 제공한다](0003-consumer-configured-reusable-workflow.md)
@@ -31,9 +35,16 @@
 ### observability
 - [ADR-0002 — 파이프라인 벤치마크를 위한 버전 관리형 통합 증거 모델을 정의한다](0002-versioned-unified-evidence-model.md)
 - [ADR-0004 — 버전별 벤치마크 증적 manifest를 이력 비교의 정본으로 사용한다](0004-versioned-benchmark-manifest-history.md)
+- [ADR-0005 — Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다](0005-consumer-owned-ci-observability.md)
+
+### opentelemetry
+- [ADR-0005 — Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다](0005-consumer-owned-ci-observability.md)
 
 ### process
 - [ADR-0001 — 아키텍처 결정을 기록한다](0001-record-architecture-decisions.md)
+
+### prometheus
+- [ADR-0005 — Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다](0005-consumer-owned-ci-observability.md)
 
 ### provenance
 - [ADR-0004 — 버전별 벤치마크 증적 manifest를 이력 비교의 정본으로 사용한다](0004-versioned-benchmark-manifest-history.md)
@@ -52,6 +63,7 @@
 ### `.github/workflows/`
 - [ADR-0003 — Consumer-configured reusable workflow로 모듈별 병렬 CI benchmark를 제공한다](0003-consumer-configured-reusable-workflow.md)
 - [ADR-0004 — 버전별 벤치마크 증적 manifest를 이력 비교의 정본으로 사용한다](0004-versioned-benchmark-manifest-history.md)
+- [ADR-0005 — Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다](0005-consumer-owned-ci-observability.md)
 
 ### `docs/decisions/`
 - [ADR-0001 — 아키텍처 결정을 기록한다](0001-record-architecture-decisions.md)
@@ -61,6 +73,10 @@
 
 ### `docs/prd/`
 - [ADR-0003 — Consumer-configured reusable workflow로 모듈별 병렬 CI benchmark를 제공한다](0003-consumer-configured-reusable-workflow.md)
+- [ADR-0005 — Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다](0005-consumer-owned-ci-observability.md)
+
+### `docs/reports/`
+- [ADR-0005 — Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다](0005-consumer-owned-ci-observability.md)
 
 ### `docs/to-be/`
 - [ADR-0003 — Consumer-configured reusable workflow로 모듈별 병렬 CI benchmark를 제공한다](0003-consumer-configured-reusable-workflow.md)
@@ -82,6 +98,7 @@
 
 ### `src/pipeline_toolkit/compare/`
 - [ADR-0004 — 버전별 벤치마크 증적 manifest를 이력 비교의 정본으로 사용한다](0004-versioned-benchmark-manifest-history.md)
+- [ADR-0005 — Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다](0005-consumer-owned-ci-observability.md)
 
 ### `src/pipeline_toolkit/contracts/`
 - [ADR-0004 — 버전별 벤치마크 증적 manifest를 이력 비교의 정본으로 사용한다](0004-versioned-benchmark-manifest-history.md)
@@ -96,11 +113,15 @@
 - [ADR-0002 — 파이프라인 벤치마크를 위한 버전 관리형 통합 증거 모델을 정의한다](0002-versioned-unified-evidence-model.md)
 - [ADR-0004 — 버전별 벤치마크 증적 manifest를 이력 비교의 정본으로 사용한다](0004-versioned-benchmark-manifest-history.md)
 
+### `src/pipeline_toolkit/telemetry/`
+- [ADR-0005 — Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다](0005-consumer-owned-ci-observability.md)
+
 ### `tests/fixtures/`
 - [ADR-0002 — 파이프라인 벤치마크를 위한 버전 관리형 통합 증거 모델을 정의한다](0002-versioned-unified-evidence-model.md)
 
 ## 시간순 (최신순)
 
+- 2026-10-01 — [ADR-0005 — Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다](0005-consumer-owned-ci-observability.md)
 - 2026-09-25 — [ADR-0004 — 버전별 벤치마크 증적 manifest를 이력 비교의 정본으로 사용한다](0004-versioned-benchmark-manifest-history.md)
 - 2026-09-23 — [ADR-0001 — 아키텍처 결정을 기록한다](0001-record-architecture-decisions.md)
 - 2026-09-23 — [ADR-0002 — 파이프라인 벤치마크를 위한 버전 관리형 통합 증거 모델을 정의한다](0002-versioned-unified-evidence-model.md)
@@ -116,6 +137,9 @@
 - ADR-0003 "Consumer-configured reusable workflow로 모듈별 병렬 CI benchmark를 제공한다" 관련: ADR-0002 "파이프라인 벤치마크를 위한 버전 관리형 통합 증거 모델을 정의한다"
 - ADR-0004 "버전별 벤치마크 증적 manifest를 이력 비교의 정본으로 사용한다" 관련: ADR-0002 "파이프라인 벤치마크를 위한 버전 관리형 통합 증거 모델을 정의한다"
 - ADR-0004 "버전별 벤치마크 증적 manifest를 이력 비교의 정본으로 사용한다" 관련: ADR-0003 "Consumer-configured reusable workflow로 모듈별 병렬 CI benchmark를 제공한다"
+- ADR-0005 "Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다" 관련: ADR-0002 "파이프라인 벤치마크를 위한 버전 관리형 통합 증거 모델을 정의한다"
+- ADR-0005 "Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다" 관련: ADR-0003 "Consumer-configured reusable workflow로 모듈별 병렬 CI benchmark를 제공한다"
+- ADR-0005 "Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다" 관련: ADR-0004 "버전별 벤치마크 증적 manifest를 이력 비교의 정본으로 사용한다"
 
 ```mermaid
 flowchart LR
@@ -123,7 +147,11 @@ flowchart LR
   ADR_0002["ADR-0002<br/>파이프라인 벤치마크를 위한 버전 관리형 통합 증거 모델을 정의한다"]
   ADR_0003["ADR-0003<br/>Consumer-configured reusable workflow로 모듈별 병렬 CI benchmark를 제공한다"]
   ADR_0004["ADR-0004<br/>버전별 벤치마크 증적 manifest를 이력 비교의 정본으로 사용한다"]
+  ADR_0005["ADR-0005<br/>Consumer-owned CI 증적을 OpenTelemetry와 관리형 Prometheus·Grafana로 관측한다"]
   ADR_0003 -.->|related| ADR_0002
   ADR_0004 -.->|related| ADR_0002
   ADR_0004 -.->|related| ADR_0003
+  ADR_0005 -.->|related| ADR_0002
+  ADR_0005 -.->|related| ADR_0003
+  ADR_0005 -.->|related| ADR_0004
 ```

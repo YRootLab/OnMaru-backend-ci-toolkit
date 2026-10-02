@@ -110,7 +110,7 @@ child job 하나라도 실패하거나 필요한 artifact가 없으면 final `ve
 
 #366에서 PR, `develop`, nightly, release의 목적을 분리한다. PR은 빠른 변경 영향 피드백, `develop`과 nightly는 full-suite 반복 표본, release는 immutable manifest와 이전 release 비교를 담당한다. CD는 build 시작부터 deploy, health check 성공까지의 lead time을 별도 evidence로 남긴다.
 
-release 비교에는 tag, commit SHA, image digest, runner profile, configuration hash, cache state, benchmark suite를 보존한다. 최소 다섯 개의 비교 가능한 성공 표본을 확보하고, 중앙값이 15% 이상 느려지면 approval-hold 결과를 만든다. 누락·실패·환경 불일치는 performance regression이 아니라 `inconclusive` 또는 별도 failure reason으로 기록한다.
+release 비교에는 tag, commit SHA, image digest, runner profile, configuration hash, cache state, benchmark suite를 보존한다. baseline/candidate 각각 최소 세 개의 비교 가능한 성공 표본을 확보하고, 중앙값이 15% 이상 느려지면 approval-hold 결과를 만든다. 세 표본의 개별 값과 변동폭을 함께 제시하며 통계적 유의성을 단정하지 않는다. 누락·실패·환경 불일치는 performance regression이 아니라 `inconclusive` 또는 별도 failure reason으로 기록한다.
 
 ## branch protection은 마지막에 별도 운영 변경으로 제안합니다
 

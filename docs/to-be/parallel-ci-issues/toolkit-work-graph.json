@@ -58,7 +58,7 @@
       "dependencies": ["T0"],
       "expected_touch_points": ["src/pipeline_toolkit/contracts/", "src/pipeline_toolkit/compare/", "src/pipeline_toolkit/reports/"],
       "parallel_notes": "No overlap with catalog implementation.",
-      "acceptance_criteria": ["PR 10% warning and release 5-run/15% hold policy are represented.", "Comparable/inconclusive/failed fixtures are covered."],
+      "acceptance_criteria": ["PR 10% warning and release 3-run/15% hold policy are represented.", "Comparable/inconclusive/failed fixtures are covered."],
       "verification_method": "TDD statistical and report tests.",
       "labels": ["enhancement", "priority:P1", "area:reporting", "area:observability", "wave:1"],
       "size": "L"
