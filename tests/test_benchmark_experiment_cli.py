@@ -344,6 +344,24 @@ def test_no_regression_and_markdown_replay_preserve_evidence_links(environment):
     assert "https://fixture.grafana.net/d/ci" in result.stdout
 
 
+@pytest.mark.parametrize("candidate_value,expected_verdict,expected_policy", [
+    (1.61, "no_regression", "none"),
+    (1.6101, "approval_review", "approval_hold"),
+])
+def test_experiment_uses_shared_release_threshold_boundary(environment, candidate_value, expected_verdict, expected_policy):
+    from pipeline_toolkit.experiments.compare import compare_collection
+    collection = _collection(environment)
+    for item in collection["manifest"]["observations"]:
+        item["value"] = 1.4 if item["side"] == "baseline" else candidate_value
+
+    result = compare_collection(collection)
+
+    assert result["classification"] == "comparable"
+    assert result["verdict"] == expected_verdict
+    assert result["comparison"]["policy_outcome"] == expected_policy
+    assert isinstance(result["comparison"]["relative_delta"], float)
+
+
 @pytest.mark.parametrize("kind,code", [("oversized", "command_output_limit"), ("sleep", "command_timeout"), ("stderr_secret", "command_failed")])
 def test_process_boundary_limits_output_time_and_does_not_leak_stderr(environment, monkeypatch, kind, code):
     from pipeline_toolkit.experiments.github import BoundedProcess
