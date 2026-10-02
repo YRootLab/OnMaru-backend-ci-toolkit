@@ -1,0 +1,11 @@
+apiVersion: 1
+providers:
+  - name: Toolkit CI
+    orgId: 1
+    folder: CI observations
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

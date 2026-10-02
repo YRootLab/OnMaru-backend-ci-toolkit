@@ -1,0 +1,33 @@
+apiVersion: 1
+prune: true
+datasources:
+  - name: Local Prometheus
+    uid: local-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: 2s
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: local-tempo
+  - name: Local Tempo
+    uid: local-tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false
+    jsonData:
+      tracesToMetrics:
+        datasourceUid: local-prometheus
+        spanStartTimeShift: -1m
+        spanEndTimeShift: 1m
+        tags:
+          - key: service.name
+            value: service_name
+        queries:
+          - name: Local fixture metric
+            query: 'toolkit_local_fixture_total{$$__tags}'

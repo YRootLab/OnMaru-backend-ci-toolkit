@@ -45,8 +45,14 @@ on:
         description: GitHub Artifact name containing the aggregate report.
         value: ${{ jobs.verify.outputs.report_artifact }}
       critical_path_seconds:
-        description: Longest observed module execution duration in this run.
+        description: Deprecated; empty because the workflow DAG critical path is unavailable.
         value: ${{ jobs.verify.outputs.critical_path_seconds }}
+      longest_module_duration_seconds:
+        description: Longest observed module command duration in seconds; not workflow DAG critical path.
+        value: ${{ jobs.verify.outputs.longest_module_duration_seconds }}
+      dag_critical_path_quality:
+        description: Availability of a verified workflow DAG critical path.
+        value: ${{ jobs.verify.outputs.dag_critical_path_quality }}
 
 permissions:
   contents: read
@@ -130,6 +136,7 @@ jobs:
         env:
           MODULE_ID: ${{ matrix.id }}
           TEST_COMMAND: ${{ matrix.test_command }}
+          TOOLKIT_REF: ${{ inputs.toolkit_ref }}
         run: |
           mkdir -p ".module-benchmark/$MODULE_ID"
           started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -159,6 +166,11 @@ jobs:
               if "System time (seconds)" in line: system_seconds = float(line.split(":", 1)[1].strip())
               if "Maximum resident set size (kbytes)" in line: max_rss_bytes = int(line.split(":", 1)[1].strip()) * 1024
           (root / "execution.json").write_text(json.dumps({
+              "schema_version": 1,
+              "run_id": int(os.environ["GITHUB_RUN_ID"]),
+              "run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "toolkit_ref": os.environ["TOOLKIT_REF"],
+              "complete": elapsed is not None,
               "module_id": module_id,
               "command": os.environ["TEST_COMMAND"],
               "exit_code": int(os.environ["MODULE_EXIT_STATUS"]),
@@ -192,6 +204,8 @@ jobs:
       manifest_uri: ${{ steps.summary.outputs.manifest_uri }}
       report_artifact: ${{ steps.summary.outputs.report_artifact }}
       critical_path_seconds: ${{ steps.summary.outputs.critical_path_seconds }}
+      longest_module_duration_seconds: ${{ steps.summary.outputs.longest_module_duration_seconds }}
+      dag_critical_path_quality: ${{ steps.summary.outputs.dag_critical_path_quality }}
     steps:
       - name: Download module evidence
         if: ${{ always() }}
@@ -207,26 +221,100 @@ jobs:
           DETECT_RESULT: ${{ needs.detect.result }}
           MODE: ${{ inputs.mode }}
           BASELINE_REF: ${{ inputs.baseline_ref }}
-          WORKFLOW_STARTED_AT: ${{ github.run_started_at }}
+          EXPECTED_MATRIX: ${{ needs.detect.outputs.matrix }}
+          TOOLKIT_REF: ${{ inputs.toolkit_ref }}
         run: |
           mkdir -p module-benchmark-report
           python - <<'PY'
           import json
           import os
+          import re
+          import math
+          from collections import Counter
           from pathlib import Path
-          executions = []
-          for path in sorted(Path("module-evidence").glob("**/execution.json")):
-              executions.append(json.loads(path.read_text()))
+          issues = []
+          def unique_object(pairs):
+              value = {}
+              for key, item in pairs:
+                  if key in value:
+                      raise ValueError("duplicate JSON key")
+                  value[key] = item
+              return value
+          def module_id_valid(value):
+              return isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", value) is not None
+          expected = set()
+          expected_valid = False
+          try:
+              matrix_json = os.environ.get("EXPECTED_MATRIX", "")
+              if len(matrix_json.encode("utf-8")) > 1048576:
+                  raise ValueError("matrix bound")
+              matrix = json.loads(matrix_json, object_pairs_hook=unique_object)
+              modules = matrix.get("include") if isinstance(matrix, dict) else None
+              if not isinstance(modules, list) or len(modules) > 256:
+                  raise ValueError("matrix schema")
+              for module in modules:
+                  module_id = module.get("id") if isinstance(module, dict) else None
+                  if not module_id_valid(module_id) or module_id in expected:
+                      raise ValueError("matrix module identity")
+                  expected.add(module_id)
+              expected_valid = True
+          except (ValueError, UnicodeError, RecursionError):
+              expected.clear()
+              issues.append("expected_matrix_invalid")
+          run_id = int(os.environ["GITHUB_RUN_ID"])
+          attempt = int(os.environ["GITHUB_RUN_ATTEMPT"])
+          toolkit_ref = os.environ["TOOLKIT_REF"]
+          paths = sorted(Path("module-evidence").glob("**/execution.json"))
+          candidates = []
+          total_bytes = 0
+          if len(paths) > 256:
+              issues.append("artifact_count_bound")
+              paths = []
+          for index, path in enumerate(paths):
+              try:
+                  if path.is_symlink() or path.stat().st_size > 1048576:
+                      raise ValueError("artifact_size_or_symlink")
+                  total_bytes += path.stat().st_size
+                  if total_bytes > 16777216:
+                      raise ValueError("artifact_total_size")
+                  record = json.loads(path.read_bytes(), object_pairs_hook=unique_object)
+                  if not isinstance(record, dict) or type(record.get("schema_version")) is not int or record["schema_version"] != 1:
+                      raise ValueError("artifact_schema")
+                  if any(type(record.get(key)) is not int or record[key] != value for key, value in (("run_id", run_id), ("run_attempt", attempt))):
+                      raise ValueError("artifact_run_attempt")
+                  if record.get("toolkit_ref") != toolkit_ref:
+                      raise ValueError("artifact_toolkit_ref")
+                  module_id = record.get("module_id")
+                  if not module_id_valid(module_id) or module_id not in expected:
+                      raise ValueError("artifact_unexpected_module")
+                  if type(record.get("complete")) is not bool or type(record.get("exit_code")) is not int or not 0 <= record["exit_code"] <= 255:
+                      raise ValueError("artifact_schema")
+                  duration = record.get("wall_clock_seconds")
+                  if duration is not None and (type(duration) not in (int, float) or not 0 <= duration <= 31536000 or not math.isfinite(duration)):
+                      raise ValueError("artifact_duration")
+                  candidates.append(record)
+              except (ValueError, UnicodeError, RecursionError, OSError):
+                  issues.append("invalid_artifact:" + str(index + 1))
+          counts = Counter(record["module_id"] for record in candidates)
+          executions = [record for record in candidates if counts[record["module_id"]] == 1]
+          issues.extend("duplicate_module:" + module_id for module_id, count in sorted(counts.items()) if count > 1)
+          issues.extend("missing_module:" + module_id for module_id in sorted(expected - {record["module_id"] for record in executions}))
+          issues.extend("partial_module:" + record["module_id"] for record in executions if not record["complete"] or record.get("wall_clock_seconds") is None)
+          executions.sort(key=lambda record: record["module_id"])
           failed = os.environ["MATRIX_RESULT"] not in {"success", "skipped"} or os.environ["DETECT_RESULT"] != "success"
+          failed = failed or any(record["exit_code"] != 0 for record in executions)
           result = "failed" if failed else "inconclusive"
-          critical_path = max((record.get("wall_clock_seconds") or 0 for record in executions), default=0)
-          sum_work = sum((record.get("wall_clock_seconds") or 0 for record in executions))
-          resource_evidence = "available" if executions and all(record.get("resource_evidence") == "available" for record in executions) else "unavailable"
+          durations = [record["wall_clock_seconds"] for record in executions
+                       if type(record.get("wall_clock_seconds")) in (int, float)
+                       and 0 <= record["wall_clock_seconds"] <= 31536000
+                       and math.isfinite(record["wall_clock_seconds"])
+                       and record.get("complete", True) is True]
+          longest_module_duration = max(durations, default=None)
+          complete_coverage = expected_valid and not issues and len(durations) == len(expected)
+          duration_quality = "available" if durations and complete_coverage else "partial" if durations else "unavailable"
+          sum_work = sum(durations)
+          resource_evidence = "available" if executions and complete_coverage and all(record.get("resource_evidence") == "available" for record in executions) else "unavailable"
           workflow_wall_clock = None
-          if os.environ.get("WORKFLOW_STARTED_AT"):
-              from datetime import datetime, timezone
-              workflow_started = datetime.fromisoformat(os.environ["WORKFLOW_STARTED_AT"].replace("Z", "+00:00"))
-              workflow_wall_clock = round((datetime.now(timezone.utc) - workflow_started).total_seconds(), 3)
           comparison_id = f"{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
           manifest_uri = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
           manifest = {
@@ -235,9 +323,16 @@ jobs:
               "baseline_ref": os.environ["BASELINE_REF"],
               "result": result,
               "executions": executions,
-              "critical_path_seconds": critical_path,
+              "expected_modules": sorted(expected),
+              "quality": {"status": "complete" if complete_coverage else "partial", "issues": sorted(set(issues))},
+              "critical_path_seconds": None,
+              "dag_critical_path_quality": "unavailable",
+              "longest_module_duration_seconds": longest_module_duration,
+              "longest_module_duration_quality": duration_quality,
               "sum_work_seconds": sum_work,
+              "sum_work_quality": "complete" if complete_coverage else "partial",
               "workflow_wall_clock_seconds": workflow_wall_clock,
+              "workflow_wall_clock_quality": "unavailable",
               "resource_evidence": resource_evidence,
               "manifest_uri": manifest_uri,
           }
@@ -245,15 +340,21 @@ jobs:
           report = [
               "# Module benchmark", "", f"Result: `{result}`", "",
               f"Workflow wall-clock: `{workflow_wall_clock if workflow_wall_clock is not None else 'unavailable'}` seconds",
-              f"Critical path: `{critical_path}` seconds", f"Sum of module work: `{sum_work}` seconds",
+              f"Longest module duration: `{longest_module_duration if longest_module_duration is not None else 'unavailable'}` seconds",
+              "DAG critical path: `unavailable`", f"Sum of module work: `{sum_work}` seconds",
               f"Resource evidence: `{resource_evidence}`", "", "| Module | Wall-clock (s) | Exit |", "| --- | ---: | ---: |",
           ]
           report.extend(f"| {record.get('module_id', 'unknown')} | {record.get('wall_clock_seconds', 'unavailable')} | {record.get('exit_code', 'unavailable')} |" for record in executions)
+          if issues:
+              report.extend(["", "## Quality issues", ""])
+              report.extend("- " + issue for issue in sorted(set(issues)))
           Path("module-benchmark-report/report.md").write_text("\n".join(report) + "\n")
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               output.write(f"result={result}\ncomparison_id={comparison_id}\n")
               output.write(f"manifest_uri={manifest_uri}\nreport_artifact=module-benchmark-report\n")
-              output.write(f"critical_path_seconds={critical_path}\n")
+              output.write("critical_path_seconds=\n")
+              output.write(f"longest_module_duration_seconds={longest_module_duration if longest_module_duration is not None else ''}\n")
+              output.write("dag_critical_path_quality=unavailable\n")
           PY
       - name: Publish aggregate evidence and report
         if: ${{ always() }}
@@ -276,6 +377,8 @@ jobs:
       manifest_uri: ${{ needs.aggregate.outputs.manifest_uri }}
       report_artifact: ${{ needs.aggregate.outputs.report_artifact }}
       critical_path_seconds: ${{ needs.aggregate.outputs.critical_path_seconds }}
+      longest_module_duration_seconds: ${{ needs.aggregate.outputs.longest_module_duration_seconds }}
+      dag_critical_path_quality: ${{ needs.aggregate.outputs.dag_critical_path_quality }}
     steps:
       - name: Enforce required fan-in result
         env:
