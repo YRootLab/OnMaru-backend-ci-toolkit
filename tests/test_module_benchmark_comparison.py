@@ -79,6 +79,34 @@ def test_release_hold_requires_three_valid_comparable_runs_and_reports_spread():
     assert "Sample range: baseline `2`, candidate `2`" in markdown
 
 
+@pytest.mark.parametrize("baseline_values,candidate_values,baseline_median,candidate_median", [
+    ((1.39, 1.4, 1.41), (1.60, 1.61, 1.62), 1.4, 1.61),
+    ((99, 100, 101), (114, 115, 116), 100, 115),
+])
+def test_release_exact_decimal_threshold_does_not_require_approval(baseline_values, candidate_values, baseline_median, candidate_median):
+    baseline = [_evidence(run_id=f"base-{index}", value=value) for index, value in enumerate(baseline_values)]
+    candidate = [_evidence(run_id=f"candidate-{index}", value=value, commit="b" * 40) for index, value in enumerate(candidate_values)]
+
+    result = compare_module_benchmarks(baseline, candidate, target=EvaluationTarget.RELEASE)
+
+    assert result.classification is ComparisonClassification.COMPARABLE
+    assert result.baseline_median == baseline_median
+    assert result.candidate_median == candidate_median
+    assert result.policy_outcome == "none"
+    assert result.relative_delta == 0.15
+    assert isinstance(result.relative_delta, float)
+
+
+def test_release_above_decimal_threshold_requires_approval():
+    baseline = [_evidence(run_id=f"base-{index}", value=1.4) for index in range(3)]
+    candidate = [_evidence(run_id=f"candidate-{index}", value=1.6101, commit="b" * 40) for index in range(3)]
+
+    result = compare_module_benchmarks(baseline, candidate, target=EvaluationTarget.RELEASE)
+
+    assert result.classification is ComparisonClassification.COMPARABLE
+    assert result.policy_outcome == "approval_hold"
+
+
 def test_release_regression_with_two_samples_is_inconclusive_not_held():
     result = compare_module_benchmarks(
         [_evidence(run_id=f"base-{index}", value=100) for index in range(2)],
@@ -111,6 +139,20 @@ def test_release_excludes_failed_sample_before_counting_three_runs():
     result = compare_module_benchmarks(baseline, candidate, target=EvaluationTarget.RELEASE)
 
     assert result.classification is ComparisonClassification.INCONCLUSIVE
+    assert result.valid_candidate_samples == 2
+    assert result.policy_outcome == "none"
+
+
+@pytest.mark.parametrize("value", [True, False, float("nan"), float("inf"), float("-inf")])
+def test_release_excludes_invalid_numeric_sample_without_crashing(value):
+    baseline = [_evidence(run_id=f"base-{index}", value=1.4) for index in range(3)]
+    candidate = [_evidence(run_id=f"candidate-{index}", value=1.61, commit="b" * 40) for index in range(2)]
+    candidate.append(_evidence(run_id="candidate-2", value=value, commit="b" * 40))
+
+    result = compare_module_benchmarks(baseline, candidate, target=EvaluationTarget.RELEASE)
+
+    assert result.classification is ComparisonClassification.INCONCLUSIVE
+    assert result.reason == "insufficient_valid_comparable_samples"
     assert result.valid_candidate_samples == 2
     assert result.policy_outcome == "none"
 

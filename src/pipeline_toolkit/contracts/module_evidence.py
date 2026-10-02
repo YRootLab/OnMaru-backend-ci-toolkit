@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Union
@@ -75,8 +76,12 @@ def validate_module_evidence(evidence: ModuleBenchmarkEvidence) -> None:
     _validate_resource(evidence.resource)
     _validate_provenance(evidence.provenance)
 
-    if evidence.metric_value is not None and not isinstance(evidence.metric_value, (int, float)):
-        raise ValueError("metric_value must be numeric")
+    if evidence.metric_value is not None and (
+        isinstance(evidence.metric_value, bool)
+        or not isinstance(evidence.metric_value, (int, float))
+        or (isinstance(evidence.metric_value, float) and not math.isfinite(evidence.metric_value))
+    ):
+        raise ValueError("metric_value must be a finite number")
     if evidence.complete and evidence.status in (EvidenceStatus.SUCCESS, EvidenceStatus.SUCCESS.value) and evidence.metric_value is None:
         raise ValueError("complete successful evidence requires metric_value")
     if evidence.artifact_uri:

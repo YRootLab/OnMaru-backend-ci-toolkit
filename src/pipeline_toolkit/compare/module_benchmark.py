@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import Enum
 from statistics import median
 from typing import Iterable, Sequence, Tuple
@@ -90,16 +91,22 @@ def compare_module_benchmarks(baseline: Sequence[ModuleBenchmarkEvidence], candi
     if len(valid_baseline) < required_samples or len(valid_candidate) < required_samples:
         return _result(ComparisonClassification.INCONCLUSIVE, "insufficient_valid_comparable_samples", target, key, valid_baseline, valid_candidate, threshold, required_samples)
 
-    baseline_median = median(item.metric_value for item in valid_baseline if item.metric_value is not None)
-    candidate_median = median(item.metric_value for item in valid_candidate if item.metric_value is not None)
-    relative_delta = None if baseline_median == 0 else (candidate_median - baseline_median) / baseline_median
+    baseline_values = _sample_values(valid_baseline)
+    candidate_values = _sample_values(valid_candidate)
+    baseline_median = median(baseline_values)
+    candidate_median = median(candidate_values)
+    # Compare decimal interpretations of the input values while preserving the public numeric median fields.
+    baseline_decimal = median(Decimal(str(value)) for value in baseline_values)
+    candidate_decimal = median(Decimal(str(value)) for value in candidate_values)
+    decimal_delta = None if baseline_decimal == 0 else (candidate_decimal - baseline_decimal) / baseline_decimal
+    relative_delta = None if decimal_delta is None else float(decimal_delta)
     return ModuleBenchmarkComparison(
         classification=ComparisonClassification.COMPARABLE, reason="comparable_samples", target=target, comparability_key=key,
         comparability_reason="matched_comparability_key", baseline_identity=_baseline_identity(valid_baseline),
         baseline_median=baseline_median, candidate_median=candidate_median, relative_delta=relative_delta,
         valid_baseline_samples=len(valid_baseline), valid_candidate_samples=len(valid_candidate), policy_threshold=threshold,
-        baseline_values=_sample_values(valid_baseline), candidate_values=_sample_values(valid_candidate),
-        required_samples=required_samples, policy_outcome=_policy_outcome(target, relative_delta, threshold),
+        baseline_values=baseline_values, candidate_values=candidate_values,
+        required_samples=required_samples, policy_outcome=_policy_outcome(target, decimal_delta, threshold),
     )
 
 
@@ -140,8 +147,8 @@ def _policy(target: EvaluationTarget) -> tuple[float, int]:
     return (0.15, 3) if target is EvaluationTarget.RELEASE else (0.10, 1)
 
 
-def _policy_outcome(target: EvaluationTarget, relative_delta: float | None, threshold: float) -> str:
-    if relative_delta is None or relative_delta <= threshold:
+def _policy_outcome(target: EvaluationTarget, relative_delta: Decimal | None, threshold: float) -> str:
+    if relative_delta is None or relative_delta <= Decimal(str(threshold)):
         return "none"
     return "approval_hold" if target is EvaluationTarget.RELEASE else "warning"
 
