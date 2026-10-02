@@ -77,6 +77,14 @@ def test_complete_successful_evidence_requires_a_metric_value():
         validate_module_evidence(evidence)
 
 
+@pytest.mark.parametrize("value", [True, False, float("nan"), float("inf"), float("-inf")])
+def test_module_evidence_rejects_boolean_and_non_finite_metric_values(value):
+    evidence = _valid_evidence(metric_value=value)
+
+    with pytest.raises(ValueError, match="metric_value"):
+        validate_module_evidence(evidence)
+
+
 def test_complete_successful_evidence_requires_a_complete_environment_identity():
     evidence = _valid_evidence(environment_identity=None)
 

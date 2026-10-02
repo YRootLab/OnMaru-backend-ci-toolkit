@@ -143,6 +143,20 @@ def test_release_excludes_failed_sample_before_counting_three_runs():
     assert result.policy_outcome == "none"
 
 
+@pytest.mark.parametrize("value", [True, False, float("nan"), float("inf"), float("-inf")])
+def test_release_excludes_invalid_numeric_sample_without_crashing(value):
+    baseline = [_evidence(run_id=f"base-{index}", value=1.4) for index in range(3)]
+    candidate = [_evidence(run_id=f"candidate-{index}", value=1.61, commit="b" * 40) for index in range(2)]
+    candidate.append(_evidence(run_id="candidate-2", value=value, commit="b" * 40))
+
+    result = compare_module_benchmarks(baseline, candidate, target=EvaluationTarget.RELEASE)
+
+    assert result.classification is ComparisonClassification.INCONCLUSIVE
+    assert result.reason == "insufficient_valid_comparable_samples"
+    assert result.valid_candidate_samples == 2
+    assert result.policy_outcome == "none"
+
+
 def test_only_failed_candidate_evidence_is_classified_as_failed():
     result = compare_module_benchmarks([_evidence(run_id="base", value=100)], [_evidence(run_id="candidate", value=None, commit="b" * 40, status=EvidenceStatus.FAILED)], target=EvaluationTarget.PULL_REQUEST)
 
