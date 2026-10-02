@@ -91,7 +91,23 @@ Offline 결과는 `verification=offline_replay`로 표시한다. 원본 artifact
 
 #556은 trusted baseline controller가 application source commit을 immutable SHA로 선택하고 양쪽에 같은 source를 checkout하도록 구현해야 한다. 전체 root Git tree OID(`git rev-parse <application_source_commit>^{tree}`)에는 application, dependency locks, database fixture와 실행 설정 등 모든 tracked 입력을 포함한다. Workflow 최적화 ref와 source checkout을 분리한다. Candidate application 코드나 test subset이 바뀌면 파이프라인 성능 비교가 아니다.
 
-Application commit에는 `.github/pipeline-benchmark-test-plan.json`을 commit한다. 최소 `scope`와 `suite`를 포함하며, #556 producer는 실제 실행 명령·대상 module·test filter·fixture/seed·dependency mode를 빠짐없이 고정해야 한다. `git show <application_source_commit>:.github/pipeline-benchmark-test-plan.json`의 **원본 바이트** SHA-256을 `test_plan_sha256`으로 기록한다. JSON 재직렬화의 hash를 쓰지 않는다. Trusted worker는 이 committed plan만 실행하고 candidate artifact/입력 문자열을 명령으로 실행하지 않으며, dirty/untracked source 변경과 scope 축소를 거부한다. Candidate config는 검토된 cache/scheduling 등 제한된 옵션만 바꿀 수 있고 테스트 명령/대상을 override할 수 없다.
+Application commit에는 `.github/pipeline-benchmark-test-plan.json`을 commit한다. 새 plan은 정수 `version: 1`과 `scopes` object로 같은 immutable application commit에서 `ci`와 `test`를 정의한다. 아래는 구조 예시이며, #556 producer는 각 entry에 실제 실행 명령·대상 module·test filter·fixture/seed·dependency mode를 빠짐없이 고정해야 한다.
+
+```json
+{
+  "version": 1,
+  "scopes": {
+    "ci": {"suite": "full-java-build", "commands": [{"argv": ["./gradlew", "check", "bootJar"]}]},
+    "test": {"suite": "full-java-test", "commands": [{"argv": ["./gradlew", "test"]}]}
+  }
+}
+```
+
+`pipeline_toolkit.experiments.contract.select_test_plan_scope(plan, selected_scope)`는 파싱한 plan 전체를 검증하고 정확히 선택한 entry를 반환하는 consumer 참조 API다. `scopes`에는 `ci`/`test`만 허용하고 하나 이상을 정의할 수 있으며 요청한 scope는 반드시 존재해야 한다. 모든 entry는 object와 공백이 아닌 `suite` 문자열을 요구한다. 반환값은 `suite` 외 실행 데이터도 보존한다. Toolkit은 실행 데이터의 의미를 해석하거나 명령을 실행하지 않으므로 trusted consumer는 자신의 실행 allowlist와 필수 필드를 별도로 검증한다. CLI는 선택한 entry의 `suite`와 observation의 `suite`가 정확히 같은지 확인한다.
+
+기존 committed source를 계속 검증하기 위해 `version`과 `scopes`가 **모두 없는** legacy `{"scope":"ci","suite":"full-java",...}`도 명시적으로 지원한다. Legacy는 선언한 scope 하나만 선택할 수 있다. Versioned plan의 top-level `scope`/`suite` 혼용, 누락되거나 미지원인 version, 미지원 scope key, 누락된 선택 scope와 잘못된 entry는 `source_identity_unverified`로 거부하며 legacy로 fallback하지 않는다. 신규 consumer는 version 1로 이관한다. Plan version은 manifest의 `pipeline-experiment/2` 정책과 별개이며 기존 manifest·attestation 형식을 변경하지 않는다.
+
+`git show <application_source_commit>:.github/pipeline-benchmark-test-plan.json`의 **원본 바이트 전체** SHA-256을 `test_plan_sha256`으로 기록한다. 선택한 entry만 hash하거나 JSON 재직렬화의 hash를 쓰지 않는다. Trusted worker는 선택한 committed entry만 실행하고 candidate artifact/입력 문자열을 명령으로 실행하지 않으며, dirty/untracked source 변경과 scope 축소를 거부한다. Candidate config는 검토된 cache/scheduling 등 제한된 옵션만 바꿀 수 있고 테스트 명령/대상을 override할 수 없다.
 
 별도 trusted attestor job은 GitHub API와 trusted worker에서 확인한 실제 checkout tree·실행 plan·run/attempt를 사용해 최종 manifest를 생성한다. Candidate sample이 주장한 digest를 그대로 복사하거나 candidate가 최종 artifact를 업로드하도록 하면 안 된다. Candidate/테스트 job에는 `id-token: write`, `attestations: write`, upload/관측 secret이나 privileged token을 주지 않는다. Attestor는 candidate source·artifact 명령을 실행하지 않으며 baseline의 검토된 immutable workflow만 사용한다. 이 격리가 실제 실행과 서명된 신원의 연결을 보장해야 한다; digest 문자열이나 sample artifact metadata만으로는 그 연결을 증명할 수 없다.
 
