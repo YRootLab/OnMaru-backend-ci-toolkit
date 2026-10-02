@@ -10,7 +10,7 @@ import zipfile
 import zlib
 
 from .compare import compare_collection, validate_observation, validate_run
-from .contract import ExperimentError, MAX_BYTES, REPOSITORY, TEST_PLAN_PATH, WORKFLOW, WORKFLOW_PATH, load_json_bytes, positive_id, require, run_url, safe_link, source_identity, validate_header
+from .contract import ExperimentError, MAX_BYTES, REPOSITORY, TEST_PLAN_PATH, WORKFLOW, WORKFLOW_PATH, load_json_bytes, positive_id, require, run_url, safe_link, select_test_plan_scope, source_identity, validate_header
 
 PREFIX = "repos/" + REPOSITORY
 
@@ -96,8 +96,8 @@ def _verify_source(github, item, manifest):
         raise ExperimentError("source_identity_unverified") from exc
     blob = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
     require(blob == document.get("sha") and hashlib.sha256(raw).hexdigest() == identity["test_plan_sha256"], "source_identity_unverified")
-    plan = load_json_bytes(raw)
-    require(plan.get("scope") == manifest["scope"] and plan.get("suite") == item.get("suite"), "source_identity_unverified")
+    selected = select_test_plan_scope(load_json_bytes(raw), manifest["scope"])
+    require(selected["suite"] == item.get("suite"), "source_identity_unverified")
     return {"status": "verified", **identity}
 
 

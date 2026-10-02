@@ -47,6 +47,32 @@ def scope(value: str) -> str:
     return value
 
 
+def select_test_plan_scope(plan: dict, selected_scope: str) -> dict:
+    """Validate a committed plan and return its complete selected scope entry.
+
+    Version 1 uses ``{"version": 1, "scopes": {"ci": {...}, "test": {...}}}``.
+    Unversioned legacy ``scope``/``suite`` plans remain accepted only when
+    neither version nor scopes is present. Mixed formats never fall back.
+    Execution-specific fields are preserved, not interpreted or executed;
+    consumers must validate them under their trusted worker policy.
+    """
+    code = "source_identity_unverified"
+    require(isinstance(plan, dict) and selected_scope in ("ci", "test"), code)
+    if "version" in plan or "scopes" in plan:
+        require(type(plan.get("version")) is int and plan["version"] == 1, code)
+        require("scope" not in plan and "suite" not in plan, code)
+        entries = plan.get("scopes")
+        require(isinstance(entries, dict) and bool(entries), code)
+        require(all(key in ("ci", "test") for key in entries), code)
+    else:
+        require(plan.get("scope") in ("ci", "test"), code)
+        entries = {plan["scope"]: plan}
+    for entry in entries.values():
+        require(isinstance(entry, dict) and isinstance(entry.get("suite"), str) and bool(entry["suite"].strip()), code)
+    require(selected_scope in entries, code)
+    return entries[selected_scope]
+
+
 def run_url(run_id: int) -> str:
     return f"https://github.com/{REPOSITORY}/actions/runs/{positive_id(run_id)}"
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import base64
 import contextlib
 import io
 import json
@@ -72,7 +73,7 @@ def environment(tmp_path):
         scenario_path.write_text(json.dumps(scenario))
         command = [sys.executable, "-m", "pipeline_toolkit.cli", "experiment", action, *options]
         if action in ("dry-run", "dispatch"):
-            command.extend(["--repo-root", str(repo), "--scope", "ci", "--reason", "measure cache"])
+            command.extend(["--repo-root", str(repo), "--scope", scenario["manifest"]["scope"], "--reason", "measure cache"])
         # Keep the external gh executable fake and git real. Calling the CLI
         # entry point here lets canonical coverage measure the tested code;
         # the standalone process test below also verifies module invocation.
@@ -269,6 +270,68 @@ def test_online_collection_independently_verifies_source_test_plan_and_signer(en
     assert result["collection"]["manifest_attestation"] == "verified"
     assert result["collection"]["identity_checks"]["13:1"] == {"status": "verified", **_source_identity()}
     assert result["classification"] == "comparable"
+
+
+def _committed_plan(environment, raw):
+    scenario = environment["scenario"]
+    scenario.setdefault("overrides", {})[PREFIX + "/contents/.github/pipeline-benchmark-test-plan.json?ref=" + APP_COMMIT] = {
+        "type": "file", "encoding": "base64", "content": base64.b64encode(raw).decode(),
+        "sha": hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest(),
+    }
+    for item in scenario["manifest"]["observations"]:
+        item["source_identity"]["test_plan_sha256"] = hashlib.sha256(raw).hexdigest()
+
+
+@pytest.mark.parametrize("selected_scope,suite", [("ci", "full-java"), ("test", "unit-java")])
+def test_same_committed_multiscope_plan_verifies_both_scopes(environment, selected_scope, suite):
+    # Deliberate whitespace exercises the original-byte digest, not canonical JSON.
+    raw = b'{ "version": 1, "scopes": {"ci": {"suite": "full-java", "argv": ["./gradlew", "check"]}, "test": {"suite": "unit-java", "argv": ["./gradlew", "test"]}}}\n'
+    _committed_plan(environment, raw)
+    environment["scenario"]["manifest"]["scope"] = selected_scope
+    for item in environment["scenario"]["manifest"]["observations"]:
+        item["suite"] = suite
+    receipt = _receipt(environment)
+    result = _json(environment["invoke"]("wait", "--receipt", str(receipt)))
+    assert result["classification"] == "comparable", result["exclusions"]
+    assert result["exclusions"] == []
+    assert result["collection"]["manifest_attestation"] == "verified"
+    assert all(check == {"status": "verified", **_source_identity(), "test_plan_sha256": hashlib.sha256(raw).hexdigest()} for check in result["collection"]["identity_checks"].values())
+
+
+@pytest.mark.parametrize("plan", [
+    {"version": 1, "scopes": {"test": {"suite": "full-java"}}},
+    {"version": 1, "scopes": {"ci": {"suite": "full-java"}, "unknown": {"suite": "full-java"}}},
+    {"version": 1, "scopes": {"ci": {"suite": "unit-java"}}},
+    {"version": 1, "scopes": {"ci": {}}},
+    {"version": 1, "scopes": {"ci": {"suite": "full-java"}}, "scope": "ci", "suite": "full-java"},
+], ids=["missing-scope", "unknown-scope", "suite-mismatch", "missing-suite", "ambiguous-legacy"])
+def test_invalid_multiscope_plan_never_becomes_comparable(environment, plan):
+    _committed_plan(environment, json.dumps(plan).encode())
+    receipt = _receipt(environment)
+    result = _json(environment["invoke"]("wait", "--receipt", str(receipt)))
+    assert result["classification"] == "inconclusive"
+    assert "source_identity_unverified" in {record["reason"] for record in result["exclusions"]}
+
+
+@pytest.mark.parametrize("change", ["raw-digest", "blob", "commit", "tree", "attestation"])
+def test_multiscope_plan_still_requires_authentic_source_evidence(environment, change):
+    raw = b'{"version":1,"scopes":{"ci":{"suite":"full-java"},"test":{"suite":"unit-java"}}}'
+    _committed_plan(environment, raw)
+    scenario = environment["scenario"]
+    if change == "raw-digest":
+        for item in scenario["manifest"]["observations"]:
+            item["source_identity"]["test_plan_sha256"] = hashlib.sha256(raw + b"\n").hexdigest()
+    elif change == "blob":
+        scenario["overrides"][PREFIX + "/contents/.github/pipeline-benchmark-test-plan.json?ref=" + APP_COMMIT]["sha"] = "e" * 40
+    elif change in ("commit", "tree"):
+        scenario["overrides"][PREFIX + "/git/commits/" + APP_COMMIT] = {"sha": "e" * 40 if change == "commit" else APP_COMMIT, "tree": {"sha": "e" * 40 if change == "tree" else APP_TREE}}
+    else:
+        scenario["attestation_failure"] = True
+    receipt = _receipt(environment)
+    result = _json(environment["invoke"]("wait", "--receipt", str(receipt)))
+    assert result["classification"] == "inconclusive"
+    reason = "manifest_attestation_unavailable" if change == "attestation" else "source_identity_unverified"
+    assert reason in {record["reason"] for record in result["exclusions"]}
 
 
 def test_workflow_refs_can_differ_while_verified_application_tree_is_equal(environment):
