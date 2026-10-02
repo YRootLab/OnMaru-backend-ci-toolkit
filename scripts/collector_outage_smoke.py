@@ -36,6 +36,20 @@ def query_value(query, timeout=3):
     return sum(float(item["value"][1]) for item in response["data"]["result"])
 
 
+def verify_grafana_outage(queries, before, started_ms, timeout=55):
+    keys = ("export_failed_spans", "export_queue_pressure", "export_in_flight")
+
+    def observed_outage(request_timeout):
+        for key in keys:
+            response = request(GRAFANA + "/api/ds/query", {"from": str(started_ms - 1000), "to": str(time.time_ns() // 1_000_000), "queries": [{"refId": "A", "datasource": {"type": "prometheus", "uid": "local-prometheus"}, "expr": queries[key]["query"], "range": True, "intervalMs": 2000, "maxDataPoints": 1000}]}, timeout=request_timeout)
+            validate_frames(response, numeric=True)
+            values = [value for frame in response["results"]["A"]["frames"] for column in frame["data"]["values"][1:] for value in column if value is not None]
+            if max(values) <= (before if key == "export_failed_spans" else 0):
+                raise ValueError(f"Grafana outage range is missing query key: {key}")
+
+    retry(observed_outage, timeout)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--exercise-outage", action="store_true", required=True, help="explicitly stop/restart only this disposable project's Tempo service")
@@ -59,12 +73,7 @@ def main(argv=None):
             if peaks["export_failed_spans"] <= before or peaks["export_queue_pressure"] <= 0 or peaks["export_in_flight"] <= 0:
                 raise ValueError("Waiting for real failed attempts and queue/in-flight pressure")
         retry(observed_failure, 55)
-        for key in keys:
-            response = request(GRAFANA + "/api/ds/query", {"from": str(started_ms - 1000), "to": str(time.time_ns() // 1_000_000), "queries": [{"refId": "A", "datasource": {"type": "prometheus", "uid": "local-prometheus"}, "expr": queries[key]["query"], "range": True, "intervalMs": 2000, "maxDataPoints": 1000}]})
-            validate_frames(response, numeric=True)
-            values = [value for frame in response["results"]["A"]["frames"] for column in frame["data"]["values"][1:] for value in column if value is not None]
-            if max(values) <= (before if key == "export_failed_spans" else 0):
-                raise ValueError("Grafana did not display the induced exporter outage")
+        verify_grafana_outage(queries, before, started_ms)
     finally:
         # No resource deletion: restart only Tempo; tmpfs data is disposable.
         subprocess.run(COMPOSE + ["start", "tempo"], check=True, capture_output=True, timeout=20)

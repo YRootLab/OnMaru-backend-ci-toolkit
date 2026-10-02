@@ -179,6 +179,40 @@ def test_outage_fixture_is_bounded_and_uses_only_synthetic_trace_payloads():
     assert len({payload["resourceSpans"][0]["scopeSpans"][0]["spans"][0]["traceId"] for payload in payloads}) == 16
 
 
+def test_outage_range_retries_when_instant_sample_precedes_range_boundary(monkeypatch):
+    path = ROOT / "scripts/collector_outage_smoke.py"
+    sys.path.insert(0, str(ROOT / "scripts"))
+    spec = importlib.util.spec_from_file_location("collector_outage_range_retry", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    values = iter((10, 11, 1, 1))
+
+    def range_response(*_args, **_kwargs):
+        value = next(values)
+        return {"results": {"A": {"frames": [{"data": {"values": [[1790945104000], [value]]}}]}}}
+
+    monkeypatch.setattr(module, "request", range_response)
+    queries = {key: {"query": key} for key in ("export_failed_spans", "export_queue_pressure", "export_in_flight")}
+
+    module.verify_grafana_outage(queries, before=10, started_ms=1790945089127, timeout=1)
+
+
+def test_outage_range_timeout_names_the_missing_query(monkeypatch):
+    path = ROOT / "scripts/collector_outage_smoke.py"
+    sys.path.insert(0, str(ROOT / "scripts"))
+    spec = importlib.util.spec_from_file_location("collector_outage_range_diagnostic", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    monkeypatch.setattr(module, "request", lambda *_args, **_kwargs: {
+        "results": {"A": {"frames": [{"data": {"values": [[1790945104000], [10]]}}]}}
+    })
+    queries = {key: {"query": key} for key in ("export_failed_spans", "export_queue_pressure", "export_in_flight")}
+
+    with pytest.raises(RuntimeError, match="export_failed_spans"):
+        module.verify_grafana_outage(queries, before=10, started_ms=1790945089127, timeout=0.01)
+
+
 def test_live_smoke_uses_real_success_failure_evidence_and_reserved_label_safe_transform():
     smoke = smoke_module()
     from pipeline_toolkit.telemetry import MetricPolicy, transform_actions_evidence
