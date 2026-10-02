@@ -2,6 +2,37 @@
 
 Lightweight human-readable summary of meaningful repository changes.
 
+## [0.1.3](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/compare/v0.1.2...v0.1.3) (2026-10-02)
+
+
+### Features
+
+* add shard benchmark monitoring evidence ([#112](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/112)) ([4acc0c4](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/4acc0c41bf138c75836935bca90599c59f1d3bac))
+* **cli:** orchestrate pipeline benchmark experiments ([#122](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/122)) ([3cca2e3](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/3cca2e3e38968e54e542327a99e17f48584f603c))
+* **observability:** add bounded local OTLP stack ([#119](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/119)) ([9a63e2f](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/9a63e2f5f6d95bd7ff2ba1f24d23d985ef216c42))
+* **observability:** complete CI telemetry and experiment toolkit ([8b4e5b0](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/8b4e5b02696c21daae6939f24bbc39c91fb4029c))
+* **reporting:** provision CI dashboard and query contracts ([#121](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/121)) ([f094fb4](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/f094fb453851e36088031be4b40b8c4ddd13e9c2))
+* **telemetry:** add Actions evidence and observability plan ([#123](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/123)) ([0f2be2c](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/0f2be2ce00a8ad2d9d06d3b569558c266b758908))
+* **telemetry:** complete Actions attempt evidence and diagnostics ([#118](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/118)) ([6487aeb](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/6487aeb21af8f38621963d77b0c9425f0364d992))
+* **telemetry:** export bounded Actions OTLP evidence ([#120](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/120)) ([c23aab8](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/c23aab8a053830050d881816addb6fc0794a8849))
+* **telemetry:** normalize Actions timeline evidence ([e726283](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/e7262835c3d5143029c565e73d1f9e5b59c39326))
+
+
+### Bug Fixes
+
+* **benchmark:** require three valid release runs ([#117](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/117)) ([db3de78](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/db3de78cc0bd46fed0f8384019e27ed59cc2ab08))
+* **ci:** benchmark 실행 간 concurrency 격리 ([d84998a](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/d84998a62dc68370af63ee19cdd9d3f67dd22cf0))
+* **ci:** benchmark 실행 간 concurrency 격리 ([eca8ec9](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/eca8ec9ea2fef9194a07ab65aaa8758692ac9f18))
+* **cli:** harden experiment links and outcome policy ([#122](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/122)) ([f4b5ed8](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/f4b5ed858fa84089875fc605e681cdfb14799ed6))
+* **experiments:** bound collection and verify source scope ([#122](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/122), [#115](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/115)) ([dbbe945](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/dbbe9456b7140e9fa7ac725678665d99df031c63))
+* **experiments:** validate streaming ZIP descriptors ([#122](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/122), [#115](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/115)) ([178c503](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/178c503a26490dd59ba0130a974c4bfbcaf43d32))
+* **observability:** pin image digests and restrict smoke transport ([#119](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/119)) ([e7e49f0](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/e7e49f0567408ad2ac5ed26560650483cc3e7141))
+* **reporting:** observe Collector export failures and queue pressure ([#121](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/121)) ([bb4f42b](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/bb4f42b45745652b9d3a499fb8efea707a844d41))
+* **telemetry:** avoid Prometheus job label collision ([#120](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/120)) ([27b02f0](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/27b02f02af8c846b950290f3a5eaa3fa060be2f5))
+* **telemetry:** preserve module failures and secure run links ([#115](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/115)) ([ee7e0f9](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/ee7e0f99ca7605349e7b6ec48052de1f8805ae39))
+* **telemetry:** resume OTLP batches after partial acceptance ([#120](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/120)) ([c6165f1](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/c6165f1b127fd3f3998d4a3301de44cff3a13495))
+* **telemetry:** validate aggregate coverage and show module failures ([#118](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/118)) ([d1efe50](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/commit/d1efe50684d612926b4e8c1f7fcdbee68b6af102))
+
 ## [0.1.2](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/compare/v0.1.1...v0.1.2) (2026-09-25)
 
 
