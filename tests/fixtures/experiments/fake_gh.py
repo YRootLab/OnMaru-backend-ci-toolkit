@@ -65,7 +65,8 @@ elif endpoint.startswith(prefix + "/contents/.github/workflows/pipeline-benchmar
     workflow = "on:\n  workflow_dispatch:\n    inputs:\n      baseline_ref: {}\n      candidate_ref: {}\n      scope: {}\n      reason: {}\n"
     response = {"type": "file", "encoding": "base64", "content": base64.b64encode(workflow.encode()).decode()}
 elif endpoint in (prefix + "/issues/555", prefix + "/issues/556"):
-    response = {"state": scenario.get("gate_state", "closed")}
+    issue = endpoint.rsplit("/", 1)[1]
+    response = {"state": scenario.get("gate_states", {}).get(issue, scenario.get("gate_state", "closed"))}
 elif endpoint == prefix + "/actions/workflows/pipeline-benchmark-experiment.yml/dispatches" and method == "POST":
     response = {"workflow_run_id": 900, "run_url": "https://api.github.com/" + prefix + "/actions/runs/900", "html_url": "https://github.com/" + repo + "/actions/runs/900"}
 elif endpoint == prefix + "/actions/runs/900/attempts/1":

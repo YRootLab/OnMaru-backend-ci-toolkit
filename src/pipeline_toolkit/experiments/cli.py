@@ -20,6 +20,8 @@ def add_parser(subparsers):
         action.add_argument("--repo-root", default=".")
         action.add_argument("--scope", default="ci")
         action.add_argument("--reason", default="pipeline experiment")
+        if name == "dispatch":
+            action.add_argument("--bootstrap-integration", action="store_true")
     wait = actions.add_parser("wait")
     wait.add_argument("--receipt", required=True)
     wait.add_argument("--timeout", type=float, default=1800)
@@ -33,8 +35,16 @@ def execute(args, github=None):
     github = github or GitHub()
     try:
         if args.experiment_action in ("dry-run", "dispatch"):
-            operation = create_plan if args.experiment_action == "dry-run" else dispatch
-            result = operation(github, Path(args.repo_root).resolve(), args.scope, args.reason)
+            if args.experiment_action == "dry-run":
+                result = create_plan(github, Path(args.repo_root).resolve(), args.scope, args.reason)
+            else:
+                result = dispatch(
+                    github,
+                    Path(args.repo_root).resolve(),
+                    args.scope,
+                    args.reason,
+                    bootstrap_integration=args.bootstrap_integration,
+                )
         elif args.experiment_action == "wait":
             result = wait_and_collect(github, load_document(Path(args.receipt)), timeout=args.timeout, poll_interval=args.poll_interval)
         else:

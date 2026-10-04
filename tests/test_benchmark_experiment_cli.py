@@ -156,6 +156,34 @@ def test_dispatch_respects_integration_gate_and_records_exact_run(environment):
     assert posts[0]["body"] == receipt["dispatch_payload"]
 
 
+def test_explicit_bootstrap_dispatch_breaks_only_the_initial_integration_cycle(environment):
+    environment["scenario"]["gate_states"] = {"555": "closed", "556": "open"}
+    receipt = _json(environment["invoke"]("dispatch", "--bootstrap-integration"))
+    assert receipt["integration_gate_status"] == {
+        "bootstrap": True,
+        "issues": {"555": "closed", "556": "open"},
+    }
+    posts = [call for call in _calls(environment) if "POST" in call["args"]]
+    assert len(posts) == 1
+    assert posts[0]["body"] == receipt["dispatch_payload"]
+
+
+def test_bootstrap_dispatch_never_bypasses_observability_gate(environment):
+    environment["scenario"]["gate_states"] = {"555": "open", "556": "open"}
+    result = environment["invoke"]("dispatch", "--bootstrap-integration")
+    assert result.returncode == 2
+    assert json.loads(result.stdout)["error"]["code"] == "integration_gate_open"
+    assert not any("POST" in call["args"] for call in _calls(environment))
+
+
+def test_bootstrap_dispatch_is_rejected_after_consumer_gate_closes(environment):
+    environment["scenario"]["gate_states"] = {"555": "closed", "556": "closed"}
+    result = environment["invoke"]("dispatch", "--bootstrap-integration")
+    assert result.returncode == 2
+    assert json.loads(result.stdout)["error"]["code"] == "integration_bootstrap_not_required"
+    assert not any("POST" in call["args"] for call in _calls(environment))
+
+
 def test_wait_collects_exact_attempts_and_calls_comparator(environment):
     receipt = _receipt(environment)
     environment["scenario"]["pending_polls"] = 1

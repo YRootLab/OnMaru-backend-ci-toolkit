@@ -52,14 +52,27 @@ def create_plan(github, root: Path, requested_scope: str, reason: str) -> dict:
     return {"version": 1, "policy_version": POLICY_VERSION, "repository": REPOSITORY, "actor": actor, "branch": branch, "baseline_ref": baseline, "candidate_ref": candidate, "scope": requested_scope, "workflow_id": workflow_id, "workflow": WORKFLOW, "required_samples": 3, "threshold": 0.15, "dry_run": True, "dispatch_payload": payload, "integration_gate": ["https://github.com/" + REPOSITORY + "/issues/555", "https://github.com/" + REPOSITORY + "/issues/556"]}
 
 
-def dispatch(github, root: Path, requested_scope: str, reason: str) -> dict:
+def dispatch(github, root: Path, requested_scope: str, reason: str, *, bootstrap_integration: bool = False) -> dict:
     plan = create_plan(github, root, requested_scope, reason)
+    gate_states = {}
     for issue in (555, 556):
-        require(github.api(PREFIX + f"/issues/{issue}").get("state") == "closed", "integration_gate_open")
+        state = github.api(PREFIX + f"/issues/{issue}").get("state")
+        require(state in ("open", "closed"), "integration_gate_unavailable")
+        gate_states[str(issue)] = state
+    require(gate_states["555"] == "closed", "integration_gate_open")
+    if bootstrap_integration:
+        require(gate_states["556"] == "open", "integration_bootstrap_not_required")
+    else:
+        require(gate_states["556"] == "closed", "integration_gate_open")
     # Do not silently replace an approved immutable plan if a branch moved.
     branch, candidate = _local_identity(github, root)
     require(branch == plan["branch"] and candidate == plan["candidate_ref"] and _remote_ref(github, "develop") == plan["baseline_ref"] and _remote_ref(github, branch) == candidate, "refs_moved")
     response = github.api(PREFIX + "/actions/workflows/" + WORKFLOW + "/dispatches", payload=plan["dispatch_payload"])
     run_id = positive_id(response.get("workflow_run_id"))
     require(response.get("html_url") == run_url(run_id), "dispatch_identity_missing")
-    return dict(plan, dry_run=False, experiment_run={"id": run_id, "attempt": 1, "url": run_url(run_id)})
+    return dict(
+        plan,
+        dry_run=False,
+        integration_gate_status={"bootstrap": bootstrap_integration, "issues": gate_states},
+        experiment_run={"id": run_id, "attempt": 1, "url": run_url(run_id)},
+    )
