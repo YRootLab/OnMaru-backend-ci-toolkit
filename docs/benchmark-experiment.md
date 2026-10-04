@@ -4,7 +4,7 @@ Toolkit #122는 OnMaruBE의 CI 또는 test 파이프라인 변경을 고정된 `
 
 ## 현재 통합 상태
 
-로컬 계약은 fake `gh` subprocess와 comparator로 검증한다. 실제 통합은 [OnMaruBE #555](https://github.com/YRootLab/OnMaru-backend/issues/555)의 관측 검증과 [#556](https://github.com/YRootLab/OnMaru-backend/issues/556)의 소비자 workflow가 완료된 뒤 별도 명시적 dispatch 한 번으로 검증해야 한다. CLI는 두 Issue가 모두 `closed`인 경우에만 POST를 허용한다. Issue 종료는 구현과 운영 검증을 대체하지 않으며, #556은 아래 artifact·run-name 계약까지 구현해야 한다. 이 기능의 개발·테스트에서는 실제 Actions dispatch를 실행하지 않았다.
+로컬 계약은 fake `gh` subprocess와 comparator로 검증한다. 실제 통합은 [OnMaruBE #555](https://github.com/YRootLab/OnMaru-backend/issues/555)의 관측 검증이 완료된 뒤 [#556](https://github.com/YRootLab/OnMaru-backend/issues/556)의 소비자 workflow를 별도 명시적 dispatch 한 번으로 검증한다. 일반 dispatch는 두 Issue가 모두 `closed`인 경우에만 POST를 허용한다. 다만 #555가 `closed`이고 #556만 실제 dispatch 완료 조건 때문에 `open`인 최초 통합 검증에서는 `--bootstrap-integration`을 명시할 수 있다. Receipt는 두 Issue 상태와 bootstrap 사용 여부를 기록한다. 이 옵션은 #555를 우회할 수 없고 #556이 이미 닫힌 뒤에는 거부된다. Issue 종료는 구현과 운영 검증을 대체하지 않으며, #556은 아래 artifact·run-name 계약까지 구현해야 한다.
 
 ## 실행
 
@@ -14,6 +14,7 @@ OnMaruBE의 깨끗한 `feature/*` 브랜치에서 후보 커밋을 `origin`에 p
 pipeline-toolkit experiment
 pipeline-toolkit experiment dry-run --repo-root /path/to/OnMaruBE --scope ci --reason 'Gradle cache 비교'
 pipeline-toolkit experiment dispatch --repo-root /path/to/OnMaruBE --scope test --reason 'test 파이프라인 비교' > /outside/consumer/receipt.json
+pipeline-toolkit experiment dispatch --bootstrap-integration --repo-root /path/to/OnMaruBE --scope ci --reason '최초 통합 검증' > /outside/consumer/bootstrap-receipt.json
 pipeline-toolkit experiment wait --receipt /outside/consumer/receipt.json --timeout 1800 --poll-interval 5 > /outside/consumer/result.json
 ```
 
