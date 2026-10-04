@@ -131,7 +131,12 @@ def _payload(signal, items):
             if key not in metrics:
                 metrics[key] = {"name": point.name, "unit": point.unit, point.kind: {"dataPoints": []}}
                 if point.kind == "histogram":
-                    metrics[key][point.kind]["aggregationTemporality"] = 1  # DELTA
+                    # Each payload is a complete, bounded observation from the
+                    # source run's start through its observed timestamp. Grafana
+                    # Cloud's OTLP-to-Mimir path rejects DELTA histograms for
+                    # this snapshot shape, so describe the interval as
+                    # CUMULATIVE and retain its explicit startTimeUnixNano.
+                    metrics[key][point.kind]["aggregationTemporality"] = 2
             data = {"attributes": _attributes(point.labels), "timeUnixNano": str(point.time_ns)}
             if point.kind == "histogram":
                 if point.start_ns is not None:
