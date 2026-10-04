@@ -51,7 +51,7 @@ def test_histogram_keeps_count_sum_and_duration_and_gauges_remain_non_cumulative
     batches = api().build_batches(transformed(), config())
     metrics = [m for b in batches if b.signal == "metrics" for m in json.loads(b.body)["resourceMetrics"][0]["scopeMetrics"][0]["metrics"]]
     duration = next(m for m in metrics if m["name"] == "toolkit_ci_job_duration_seconds")
-    assert duration["histogram"]["aggregationTemporality"] == 1
+    assert duration["histogram"]["aggregationTemporality"] == 2
     point = duration["histogram"]["dataPoints"][0]
     assert (point["count"], point["sum"], point["bucketCounts"]) == ("1", 8.0, ["1"])
     assert point["explicitBounds"] == []

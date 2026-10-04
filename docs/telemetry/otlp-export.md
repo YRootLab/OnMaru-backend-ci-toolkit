@@ -41,10 +41,10 @@ CI data-point labels must not use Prometheus target labels `job`/`instance`, int
 
 | Metric | Unit/type | Source and missing-data behavior |
 | --- | --- | --- |
-| `toolkit_ci_workflow_observed_window_seconds` | seconds, delta histogram | Source observed job window; includes its partial/available quality. Not workflow wall-clock. |
-| `toolkit_ci_job_duration_seconds` | seconds, delta histogram | Valid source job durations; unavailable/invalid intervals omitted. |
-| `toolkit_ci_step_duration_seconds` | seconds, delta histogram | Valid source step durations, grouped by configured job; no step-name labels. |
-| `toolkit_ci_module_duration_seconds` | seconds, delta histogram | Complete module command durations only; no invented module span. |
+| `toolkit_ci_workflow_observed_window_seconds` | seconds, cumulative histogram | Complete source observation from the earliest valid job start through the observed timestamp; includes its partial/available quality. Not workflow wall-clock. |
+| `toolkit_ci_job_duration_seconds` | seconds, cumulative histogram | Valid source job durations in the completed observation; unavailable/invalid intervals omitted. |
+| `toolkit_ci_step_duration_seconds` | seconds, cumulative histogram | Valid source step durations in the completed observation, grouped by configured job; no step-name labels. |
+| `toolkit_ci_module_duration_seconds` | seconds, cumulative histogram | Complete module command durations in the observation only; no invented module span. |
 | `toolkit_ci_work_seconds` | seconds, gauge | Source sum of valid job work, or sum of complete module durations; partial coverage is labeled. All-missing work is omitted. |
 | `toolkit_ci_outcome` | count, gauge | Observation count grouped by workflow/job/step/module and bounded outcome. This is not a cumulative counter. |
 | `toolkit_ci_collection_quality` | count, gauge | Evidence/artifact quality and job/step/module timing completeness. Missing artifacts still emit quality. |
