@@ -50,3 +50,9 @@ Updated: 2026-10-04
 - [OnMaruBE #525](https://github.com/YRootLab/OnMaru-backend/issues/525): evaluate affected modules and Gradle cache changes with comparable before/after evidence after observability is in place.
 
 Historical implementation notes remain in Git history and the linked Issues/PRs; this file tracks the current handoff only.
+
+## 2026-11-20 측정·승격 계약 문서 보강 (#140)
+
+- 브랜치: `docs/140-pipeline-measurement-review`, 관련 #139/#140와 Backend #867.
+- README에 `docs/telemetry/measurement-rollout-review.md`를 연결했다. p95 표본, cache 정책/관측 분리, selected-plan 비교, clock와 critical-path quality, 정확한 SHA gate, diagram evidence 검증을 보강했다.
+- 이번 변경은 문서이며 collector/schema/dashboard 구현은 #139에서 이어간다. 다음 작업은 계약 fixture와 collector integration 구현이다.

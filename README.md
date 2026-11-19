@@ -1,5 +1,7 @@
 # OnMaru Backend Pipeline Toolkit
 
+계층별 성능 수집과 파이프라인 개선의 설계 보강은 [측정·승격 계약 검토](docs/telemetry/measurement-rollout-review.md)를 참고합니다. 이 문서는 #139·#140의 목표와 기존 동작을 구분하며, 표본 수·cache 조건·critical path·시각화 검증 기준을 정의합니다.
+
 이 저장소는 여러 runtime과 모듈을 가진 백엔드의 CI를 측정하고, 병렬 테스트 결과를 안전하게 해석하며, release 간 추세를 비교하기 위한 재사용 도구 모음입니다. 애플리케이션에 라이브러리로 포함하지 않고 GitHub Actions의 version-pinned reusable workflow와 CLI로 사용합니다.
 
 OnMaru-backend의 CI가 느려지는 이유는 테스트가 많다는 사실 하나로 설명되지 않습니다. Spring의 여러 Gradle 모듈, FastAPI 품질 검사, 계약 검증처럼 성격이 다른 작업이 한 줄로 이어지면, 독립적으로 실행할 수 있는 작업도 앞선 작업을 기다려야 합니다. 이 Toolkit은 그 대기 시간을 줄이는 병렬 실행을 돕되, 결과가 우연히 빨랐던 것인지 실제 개선인지도 함께 확인하도록 설계되었습니다.
