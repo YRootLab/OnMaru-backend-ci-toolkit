@@ -53,7 +53,7 @@ Historical implementation notes remain in Git history and the linked Issues/PRs;
 
 ## 2026-11-20 측정·승격 계약 문서 보강 (#140)
 
-- spec-to-issues 제안: `docs/prd/ci-performance/PRD.md` 통합 PRD, `work-graph.json`, `issue-drafts.md` 작성. #139 Root·#140 W4 재사용, 신규 child 5개(총 child 6개). validate 오류/경고 0개. 사용자에게 전체 목록·Wave 승인받은 뒤 GitHub native 관계 생성/본문 갱신한다. 아직 새 Issue나 관계를 생성하지 않았다.
+- spec-to-issues 승인 완료: #139 Root, W0=#141, W1=#142, W2=#143, W3=#144, W4=#140, W5=#145. 신규 child 5개 생성, 기존 #140 재사용, Root/child 본문에 실제 번호와 DAG 적용. GitHub native sub-issue·blocked-by/blocking 관계를 API로 검증한다. PRD와 Work Graph에도 번호를 동기화했다. 다음 작업은 Wave 0 #141 계약 구현이다.
 
 - 브랜치: `docs/140-pipeline-measurement-review`, 관련 #139/#140와 Backend #867.
 - README에 `docs/telemetry/measurement-rollout-review.md`를 연결했다. p95 표본, cache 정책/관측 분리, selected-plan 비교, clock와 critical-path quality, 정확한 SHA gate, diagram evidence 검증을 보강했다.

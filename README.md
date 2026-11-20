@@ -1,6 +1,6 @@
 # OnMaru Backend Pipeline Toolkit
 
-새 성능 관측 플랫폼의 [통합 PRD](docs/prd/ci-performance/PRD.md)와 [세부 Issue 초안·의존 그래프](docs/prd/ci-performance/issue-drafts.md)는 #139·#140을 하나의 실행 계획으로 연결합니다. 현재는 Issue 분해 승인 전 제안입니다.
+새 성능 관측 플랫폼의 [통합 PRD](docs/prd/ci-performance/PRD.md)와 [세부 Issue 본문·의존 그래프](docs/prd/ci-performance/issue-drafts.md)는 총괄 #139와 하위 #140~#145를 하나의 승인된 실행 계획으로 연결합니다.
 
 계층별 성능 수집과 파이프라인 개선의 설계 보강은 [측정·승격 계약 검토](docs/telemetry/measurement-rollout-review.md)를 참고합니다. 이 문서는 #139·#140의 목표와 기존 동작을 구분하며, 표본 수·cache 조건·critical path·시각화 검증 기준을 정의합니다.
 

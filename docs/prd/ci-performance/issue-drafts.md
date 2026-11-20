@@ -1,8 +1,8 @@
-# Toolkit Issue 분해 제안과 본문 초안
+# Toolkit 승인된 Issue 본문과 실행 그래프
 
-> 승인 전 초안. 새 Issue는 아직 생성하지 않았다. #139 Root와 #140 문서 child를 재사용하고 신규 child 5개를 생성하는 안이다.
+> 사용자 승인 후 #139를 Root로 재사용하고 #140~#145를 하위 Issue로 연결했다. 이 파일은 Work Graph에서 생성한 구현 계획이다.
 
-## Root #139 재구성 초안
+## Root #139
 
 ### 목표
 
@@ -31,12 +31,12 @@ Consumer artifact → bounded validation → normalized model → offline compar
 
 ### Child 목록
 
-- [ ] W0: feat(contracts): CI performance evidence와 cache identity 계약 구현 (승인 후 신규 생성)
-- [ ] W1: feat(ingest): 성능 artifact 정규화와 bounded job catalog 연결 (승인 후 신규 생성)
-- [ ] W2: feat(compare): 실험 변수·cache cohort·표본 품질을 반영한 비교 엔진 (승인 후 신규 생성)
-- [ ] W3: feat(telemetry): 계층별 OTLP metric과 Grafana 병목 탐색 구현 (승인 후 신규 생성)
-- [ ] W4: docs(architecture): 새 계약 기반 README·D2 파이프라인과 migration 정비 (#140 재사용)
-- [ ] W5: test(integration): Consumer 증적부터 비교·Grafana까지 호환성 검증 (승인 후 신규 생성)
+- [ ] #141 W0: feat(contracts): CI performance evidence와 cache identity 계약 구현
+- [ ] #142 W1: feat(ingest): 성능 artifact 정규화와 bounded job catalog 연결
+- [ ] #143 W2: feat(compare): 실험 변수·cache cohort·표본 품질을 반영한 비교 엔진
+- [ ] #144 W3: feat(telemetry): 계층별 OTLP metric과 Grafana 병목 탐색 구현
+- [ ] #140 W4: docs(architecture): 새 계약 기반 README·D2 파이프라인과 migration 정비
+- [ ] #145 W5: test(integration): Consumer 증적부터 비교·Grafana까지 호환성 검증
 
 ### 의존 관계
 
@@ -366,27 +366,27 @@ pytest tests/test_performance_telemetry.py; build_ci_dashboard.py --check; dispo
 
 ### 목표
 
-初見の開発者がsourceからGrafanaまでと現在/計画の差を理解できる文書を提供する。
+처음 보는 개발자가 source부터 Grafana까지와 현재·계획의 차이를 이해할 문서를 제공한다.
 
 ### 배경과 선행 계약
 
-既存#140を再利用。W2の比較結果とW3の実装済みmetric/queryを正確に説明する最終文書タスクであり、現時点の草案は先行して作成できる。
+기존 #140을 재사용한다. W2 비교 결과와 W3의 구현된 metric/query를 설명하는 최종 문서 작업이다. 초안 작성은 선행 가능하다.
 
 ### 범위
 
-README overview、context/sequence/lineage/replay、D2 source/SVG、選択的Archify、old/new用語・schema migration、生成物CI検査
+README overview, context/sequence/lineage/replay, D2 source/SVG, 선택적 Archify, 구·신 용어와 schema migration, 생성물 CI 검사
 
 ### 비범위
 
-schema/collector/exporterの実装とMarketplace化
+schema/collector/exporter 구현과 Marketplace 배포
 
 ### 구현 지침
 
-live guideを更新しhistorical数値/identityは保持。CI/Module Benchmark/CI Observability identityは維持。Archify未採用でもD2/SVG/Mermaidとsource evidenceは必須。
+live guide는 갱신하고 historical 수치와 identity는 보존한다. CI/Module Benchmark/CI Observability identity는 유지한다. Archify 미채택 시에도 D2/SVG/Mermaid와 source evidence는 필수다.
 
 ### 관련 코드
 
-README.md, docs/architecture/, docs/telemetry/, 新規diagram generator check
+README.md, docs/architecture/, docs/telemetry/, 신규 diagram generator check
 
 ### Dependencies와 Blocks
 
@@ -416,43 +416,43 @@ flowchart LR
 
 ### 병렬 작업 안전성
 
-W5はconsumer fixtureとworkflow gate専用。共通README編集はW4のみ、W5は検証結果をartifactで渡す。
+W5는 consumer fixture와 workflow gate만 수정한다. 공통 README는 W4만 편집하고 W5는 검증 결과를 artifact로 전달한다.
 
 ### Acceptance Criteria
 
-- [ ] ownership/consume方式、一般CI/module/releaseの差を説明する
-- [ ] current/planned legendとsource SHA/linkを図に付ける
-- [ ] D2→SVG driftと内部リンク/alt textをCIで検査する
-- [ ] cold/warm/p95/quality/queryがW2/W3の契約と一致する
-- [ ] historical reportを改変せずmigration noteで接続する
-- [ ] 図のclipping/contrastをrenderして確認する
+- [ ] ownership/소비 방식, 일반 CI/module/release 차이를 설명한다
+- [ ] current/planned legend와 source SHA/link를 그림에 붙인다
+- [ ] D2→SVG drift와 내부 링크/alt text를 CI에서 검사한다
+- [ ] cold/warm/p95/quality/query가 W2/W3 계약과 일치한다
+- [ ] historical report는 보존하고 migration note로 연결한다
+- [ ] 그림의 clipping/contrast를 render해 확인한다
 
 ### 검증 방법
 
-docs/link/drift tests; pinned D2 render; Mermaid parse; SVG preview; Archify採用時finalize/browser check
+docs/link/drift tests; pinned D2 render; Mermaid parse; SVG preview; Archify 채택 시 finalize/browser check
 
 
 ## W5 — test(integration): Consumer 증적부터 비교·Grafana까지 호환성 검증
 
 ### 목표
 
-契約単体だけでなくconsumerが生成する形のartifactを端から端まで検証する。
+consumer가 생성하는 형식의 artifact를 비교와 관측까지 end-to-end로 검증한다.
 
 ### 배경과 선행 계약
 
-W2 comparatorとW3 OTLP/Grafanaを統合する。Backend #867 collectorは外部依存。未完成ならsynthetic fixture検証のみ完了しlive rolloutはpendingとしてRootに残す。
+W2 comparator와 W3 OTLP/Grafana를 통합한다. Backend #867 collector는 외부 의존이다. 미완료면 synthetic fixture 검증만 완료하고 live rollout은 pending으로 Root에 남긴다.
 
 ### 범위
 
-representative consumer artifact, pinned-SHA invoke、旧新reader、manifest/report/trace identity、CI verification wiring、upgrade evidence handoff
+대표 consumer artifact, SHA-pinned 호출, 구·신 reader, manifest/report/trace identity, CI verification 연결, upgrade evidence 인계
 
 ### 비범위
 
-Backend production code変更、live benchmark自動dispatch、release自動merge・公開
+Backend production code 수정, live benchmark 자동 dispatch, release 자동 merge·공개
 
 ### 구현 지침
 
-Toolkit refをimmutable SHA固定。Backend ownerがcollectorを実装後同一refでbaseline/candidateを採る。release実行は既存Git Flowで行い、このIssueのテスト成功だけで自動公開しない。
+Toolkit ref는 immutable SHA로 고정한다. Backend collector 구현 후 같은 ref로 baseline/candidate를 수집한다. release는 기존 Git Flow로 진행하고 이 Issue의 테스트 성공만으로 자동 공개하지 않는다.
 
 ### 관련 코드
 
@@ -484,21 +484,21 @@ flowchart LR
 
 ### 병렬 작업 안전성
 
-W4がREADME/docsとdiagram検証を担当する。W4はCI yamlを触らずcheck scriptを提供し、ここで統合する。
+W4는 README/docs와 diagram 검증을 맡는다. W4가 CI YAML 대신 check script를 제공하고 W5에서 통합한다.
 
 ### Acceptance Criteria
 
-- [ ] success/failure/cancel/partial/mixed-cache consumer fixtureがend-to-endで整合する
-- [ ] foreign ref/SHA/attemptと実行可能artifactをfail-closed処理する
-- [ ] legacy-limitedとnew envelopeの互換/非互換を検査する
-- [ ] source CI verdictがexport outageで変わらない
-- [ ] consumer upgrade用SHA・schema・変更一覧・未検証live項目をartifactに残す
-- [ ] Toolkit全verificationで新suiteが実行される
+- [ ] success/failure/cancel/partial/mixed-cache consumer fixture가 end-to-end로 일치한다
+- [ ] 다른 ref/SHA/attempt와 실행 가능한 artifact를 fail-closed 처리한다
+- [ ] legacy-limited와 새 envelope의 호환·비호환을 검사한다
+- [ ] export outage가 source CI verdict를 바꾸지 않는다
+- [ ] consumer upgrade용 SHA·schema·변경 목록·미검증 live 항목을 artifact에 남긴다
+- [ ] Toolkit 전체 verification에서 새 suite가 실행된다
 
 ### 검증 방법
 
 pytest tests/test_consumer_performance_integration.py; bash scripts/verify_toolkit.sh; local round-trip evidence
 
-## GitHub 적용 계획
+## GitHub 적용 상태
 
-승인 후 #139 본문을 Root로 갱신하고 W0/W1/W2/W3/W5를 새 Issue로 생성한다. #140을 W4로 재사용한다. 실제 번호로 각 본문의 DAG와 선행/후행을 갱신하고 GitHub native Sub-Issue·blocked-by 관계를 생성 후 조회해 검증한다. 지원되지 않는 gh 옵션은 가정하지 않고 API 지원을 확인한다. Backend #867은 별도 저장소의 collector/live rollout 작업으로 연결하고 Root를 막는 외부 완료 조건으로 추적한다. 기존 Issue는 삭제하거나 닫지 않는다.
+#139 본문을 Root로 갱신하고 W0=#141, W1=#142, W2=#143, W3=#144, W4=#140, W5=#145를 생성·재사용했다. 각 본문의 실제 번호와 GitHub native Sub-Issue·blocked-by 관계를 조회해 검증한다. Backend #867은 별도 저장소의 collector/live rollout 작업으로 연결하고 Root의 외부 완료 조건으로 추적한다. 기존 Issue는 삭제하거나 닫지 않는다.

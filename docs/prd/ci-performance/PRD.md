@@ -67,7 +67,7 @@ Live 문서·fixture·query는 현재 계약으로 이전하고 historical 보�
 | W4 (#140 재사용) | README·architecture·D2 | 시각화·운영 가이드·문서 migration |
 | W5 | consumer contract·release 검증 묶음 | fixture round-trip·SHA pinning·호환성 |
 
-전체 그래프와 각 작업의 구체적인 acceptance criteria는 [work-graph.json](work-graph.json), [Issue 초안](issue-drafts.md)에 있다. #139를 Root로 재사용하고 #140을 child로 연결하는 안이며 승인 전에는 GitHub Issue 관계를 변경하지 않는다.
+전체 그래프와 각 작업의 구체적인 acceptance criteria는 [work-graph.json](work-graph.json), [Issue 본문](issue-drafts.md)에 있다. 사용자 승인에 따라 #139를 Root로 재사용하고 W0=#141, W1=#142, W2=#143, W3=#144, W4=#140, W5=#145를 하위 Issue로 연결했다. 구현은 별도로 진행한다.
 
 ## Wave별 통합 검증을 통과한 뒤 다음 단계로 진행한다
 
