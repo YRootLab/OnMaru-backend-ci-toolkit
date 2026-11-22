@@ -12,6 +12,9 @@ python3 -c 'from pathlib import Path; files = sorted(Path("docs/decisions").glob
 
 if [ -f pyproject.toml ]; then
   python3 -m compileall -q src tests
+  test -s tests/test_consumer_performance_integration.py
+  test -s tests/fixtures/consumer-performance/success.json
+  PYTHONPATH=src python3 -m pytest -q tests/test_consumer_performance_integration.py
   PYTHONPATH=src python3 -m coverage run -m pytest -q
   python3 -m coverage report --include='src/pipeline_toolkit/*' --fail-under=90
 fi
