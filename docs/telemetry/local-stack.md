@@ -1,5 +1,7 @@
 # Secret-free local metric and trace stack
 
+> Architecture: [system context](../architecture/context.md) and [call flow](../architecture/call-flow.md). Legacy names: [terminology migration](../architecture/migration.md).
+
 Issue [Toolkit #119](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/119) provides a disposable development fixture for OTLP metrics and traces. Docker Compose runs Collector → Prometheus for metrics and Collector → Tempo for traces. Grafana provisions both datasources with metric exemplar → trace and trace → metric links. [The CI dashboard](dashboard.md) is also provisioned and has a separate source-to-dashboard smoke check.
 
 Run commands from the Toolkit repository root. Prerequisites are Python 3.9+ and Docker with Compose v2 supporting `up --wait` (Docker Desktop on macOS/Windows or a Linux Docker engine). First startup downloads the pinned images and builds two small probe-enabled images; no cloud account, API key or environment secret is needed.

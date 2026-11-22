@@ -1,5 +1,7 @@
 # Module Benchmark Output Newlines Implementation Plan
 
+> **Migration note:** This plan is kept as written. Legacy names it uses (Java lane, `java-affected`/`java-full`) map to `spring-affected`/`spring-full` as described in [the terminology migration](../../architecture/migration.md). Current structure: [architecture overview](../../architecture/README.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** reusable module benchmark aggregate step이 GitHub Actions output 다섯 개와 Markdown report 줄바꿈을 올바르게 기록하도록 수정한다.

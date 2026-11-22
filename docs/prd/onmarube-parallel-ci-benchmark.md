@@ -1,5 +1,7 @@
 # OnMaruBE 모듈별 병렬 CI·Benchmark Control Plane PRD
 
+> **Migration 메모:** 이 PRD의 요구사항과 수치는 작성 당시 기준으로 보존합니다. `critical_path_seconds`는 현재 빈 값을 반환하는 deprecated 출력이며, 현재 대응은 [용어 migration](../architecture/migration.md)을 참조하십시오. 현재 구조는 [아키텍처 안내](../architecture/README.md)에 있습니다.
+
 상태: Proposed
 소유: `YRootLab/OnMaru-backend-ci-toolkit`
 Consumer: `YRootLab/OnMaru-backend`

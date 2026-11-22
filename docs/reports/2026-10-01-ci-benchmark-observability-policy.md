@@ -1,5 +1,7 @@
 # OnMaru CI/CD 벤치마크 관측 체계 최종 보고서
 
+> **Migration 메모:** 이 보고서는 작성 당시의 수치와 식별자를 그대로 보존합니다. `critical_path_seconds`의 현재 대응(`longest_module_duration_seconds`, `dag_critical_path_quality`)은 [용어 migration](../architecture/migration.md)을, 현재 구조는 [아키텍처 안내](../architecture/README.md)를 참조하십시오.
+
 작성일: 2026-10-01 · 관련 Issue: [Toolkit #113](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/113) · 결정: [ADR-0005](../decisions/0005-consumer-owned-ci-observability.md)
 
 ## 결론과 증거 수준

@@ -1,0 +1,48 @@
+# Figure: PR-to-Grafana sequence.
+# Legend: solid arrows and blue actors are implemented; dashed amber arrows and the amber actor are the planned #139 producer, not verified here.
+
+shape: sequence_diagram
+
+classes: {
+  cur: {
+    style.fill: "#e8f1ff"
+    style.stroke: "#1f4e79"
+    style.font-color: "#0b1f33"
+  }
+  plan: {
+    style.fill: "#fff7e0"
+    style.stroke: "#8a5a00"
+    style.stroke-dash: 5
+    style.font-color: "#3d2a00"
+  }
+}
+
+legend: "Legend: blue actor = current; amber dashed = planned #139 target" { class: cur }
+dev: Developer { class: cur }
+gh: GitHub PR and Actions { class: cur }
+caller: Caller CI (consumer) { class: cur }
+plan: Toolkit plan job (pinned SHA) { class: cur }
+modules: Module test jobs (matrix) { class: cur }
+agg: Aggregate and verify { class: cur }
+prod: Backend collector (planned) { class: plan }
+exp: Post-run exporter (optional) { class: cur }
+col: OTel Collector { class: cur }
+store: Mimir and Tempo { class: cur }
+graf: Grafana { class: cur }
+
+dev -> gh: open or update pull request
+gh -> caller: pull_request event
+caller -> plan: call module-benchmark at SHA
+plan -> caller: "matrix; unknown diff or unmatched path falls back to full suite"
+caller -> modules: run consumer-owned test_command per module
+modules -> prod: Gradle, Context, Testcontainers timings { style.stroke-dash: 5; style.stroke: "#8a5a00" }
+prod -> caller: ci-performance-evidence/1.0 bytes { style.stroke-dash: 5; style.stroke: "#8a5a00" }
+modules -> caller: execution.json per module
+caller -> agg: fan-in artifacts
+agg -> gh: source verdict from run and job conclusions
+caller -> exp: persisted manifest after completion
+exp -> col: OTLP/HTTP, replay-checked batches
+col -> store: metrics and traces
+dev -> graf: open CI performance dashboard
+graf -> store: PromQL and TraceQL
+graf -> gh: Tempo trace links to Actions run

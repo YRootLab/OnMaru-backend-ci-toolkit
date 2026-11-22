@@ -1,5 +1,7 @@
 # CI observations dashboard
 
+> Architecture: [Grafana to Tempo to Actions drill-down](../architecture/drilldown.md), [trust and cardinality boundaries](../architecture/boundaries.md).
+
 [Toolkit #121](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/121) consumes the [local stack](local-stack.md) and [OTLP v1 contract](otlp-export.md). The source evidence manifest remains authoritative; no panel changes a required CI verdict.
 
 ## Import and reproduce

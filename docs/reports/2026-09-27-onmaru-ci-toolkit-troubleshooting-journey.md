@@ -1,5 +1,7 @@
 # OnMaru CI Toolkit은 왜 필요했고, 어디서 느려졌는가
 
+> **Migration 메모:** 이 보고서는 작성 당시의 수치와 식별자를 그대로 보존합니다. 예전 용어(Java lane, `critical_path_seconds`, `cache_state` 문자열)의 현재 대응은 [용어 migration](../architecture/migration.md)을, 현재 구조는 [아키텍처 안내](../architecture/README.md)를 참조하십시오.
+
 - 상태: 트러블슈팅 기록
 - 기준일: 2026-09-27
 - 관련 이슈: #110
