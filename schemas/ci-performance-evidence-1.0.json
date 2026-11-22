@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://onmaru.dev/schemas/ci-performance-evidence-1.0.json",
+  "title": "CI performance evidence envelope (ci-performance-evidence/1.0)",
+  "description": "Separate namespace from the module evidence schema. Missing measurements are null and must never be encoded as zero. The Python reader in pipeline_toolkit.contracts.performance_evidence enforces the same rules plus cross-field invariants (execution counts, legacy/cacheIdentity exclusivity, duplicate keys, NaN/Infinity, and the 64 KiB payload limit).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "source", "producer", "toolchain", "clock", "quality", "test_universe", "selected", "execution"],
+  "allOf": [
+    {
+      "if": {"required": ["quality"], "properties": {"quality": {"const": "legacy-limited"}}},
+      "then": {"required": ["legacy"], "not": {"required": ["cache"]}},
+      "else": {"required": ["cache"], "not": {"required": ["legacy"]}}
+    }
+  ],
+  "properties": {
+    "schema": {"const": "ci-performance-evidence/1.0"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit_sha", "workflow", "workflow_run_id", "run_attempt"],
+      "properties": {
+        "repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", "maxLength": 140},
+        "commit_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "workflow": {"type": "string", "minLength": 1, "maxLength": 128},
+        "workflow_run_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,64}$"},
+        "run_attempt": {"type": ["integer", "null"], "minimum": 1, "description": "null only for legacy-limited documents"}
+      }
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 64},
+        "version": {"type": "string", "minLength": 1, "maxLength": 64}
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 16,
+      "additionalProperties": {"type": "string", "minLength": 1, "maxLength": 128}
+    },
+    "clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["utc_anchor", "uncertainty_ms"],
+      "properties": {
+        "utc_anchor": {"type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$", "description": "null only for legacy-limited documents"},
+        "uncertainty_ms": {"type": ["number", "null"], "minimum": 0, "description": "null means unknown, not zero"}
+      }
+    },
+    "quality": {"enum": ["complete", "partial", "unavailable", "legacy-limited"]},
+    "timings_ms": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional layer timing. Each value is a finite non-negative number or null (unavailable). Nested intervals must not be re-summed into test time.",
+      "properties": {
+        "gradle_task": {"type": ["number", "null"], "minimum": 0},
+        "context_init": {"type": ["number", "null"], "minimum": 0},
+        "container_prepare": {"type": ["number", "null"], "minimum": 0},
+        "flyway": {"type": ["number", "null"], "minimum": 0},
+        "tests": {"type": ["number", "null"], "minimum": 0}
+      }
+    },
+    "test_universe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["digest", "size"],
+      "properties": {
+        "digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "size": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "selected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["digest", "count"],
+      "properties": {
+        "digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "count": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["executed_now", "verified_from_cache"],
+      "properties": {
+        "executed_now": {"type": ["integer", "null"], "minimum": 0},
+        "verified_from_cache": {"type": ["integer", "null"], "minimum": 0}
+      },
+      "description": "Invariant: executed_now + verified_from_cache <= selected.count when all are present; selected.count <= test_universe.size when both are present."
+    },
+    "cache": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["experiment_class", "policy_digest", "cacheIdentity"],
+      "properties": {
+        "experiment_class": {"enum": ["controlled-cold", "controlled-warm", "realistic-pr", "unknown"]},
+        "policy_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "cacheIdentity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["layers", "seedProvenance"],
+          "properties": {
+            "layers": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "dependency": {"$ref": "#/$defs/layer"},
+                "build": {"$ref": "#/$defs/layer"},
+                "configuration": {"$ref": "#/$defs/layer"}
+              }
+            },
+            "seedProvenance": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["seeded", "seed_input_digest"],
+              "properties": {
+                "seeded": {"type": ["boolean", "null"]},
+                "seed_input_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "legacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cache_state"],
+      "description": "Present only when quality is legacy-limited. cache_state is preserved verbatim and never parsed into layer states; cache is absent in that case.",
+      "properties": {
+        "cache_state": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    }
+  },
+  "$defs": {
+    "layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": {"enum": ["disabled", "cold", "warm", "partial", "invalidated", "unknown"]}
+      }
+    }
+  }
+}
