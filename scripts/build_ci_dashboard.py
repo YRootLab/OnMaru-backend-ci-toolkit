@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Canonical Grafana dashboard generator. Run --check to reject stale JSON."""
+"""Canonical Grafana dashboard generator. Run --check to reject stale JSON.
+
+Each dashboard is generated from its query contract. ``ci-benchmark`` covers the
+Actions evidence (toolkit_ci_*); ``ci-performance`` covers layer telemetry
+(onmaru_ci_*). Never hand-edit the generated JSON.
+"""
 import argparse
 import json
 from pathlib import Path
@@ -7,17 +12,22 @@ import sys
 from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[1]
+RUN_LINK = "https://github.com/YRootLab/OnMaru-backend/actions/runs/${__value.raw:percentencode}"
+TARGETS = (
+    ("observability/queries/ci-benchmark.json", "observability/dashboards/ci-benchmark.json"),
+    ("observability/queries/ci-performance.json", "observability/dashboards/ci-performance.json"),
+)
 
 
-def dashboard(contract):
-    def text(panel_id, title, content, y, height=4):
-        return {"id": panel_id, "title": title, "type": "text", "gridPos": {"x": 0, "y": y, "w": 24, "h": height}, "options": {"mode": "markdown", "content": content}}
+def text(panel_id, title, content, y, height=4):
+    return {"id": panel_id, "title": title, "type": "text", "gridPos": {"x": 0, "y": y, "w": 24, "h": height}, "options": {"mode": "markdown", "content": content}}
 
-    panels = [text(1, "CI observations · source evidence stays authoritative", "Fixed metric scope: **ci / test**, trace repository: **YRootLab/OnMaru-backend**. Duration panels show exported histogram snapshot means, not percentiles or three-run comparisons. Outcome/quality/work are gauges; never interpret scrape samples as cumulative run totals. Missing data is unknown. Traces reconstruct observed job windows; workflow wall-clock, queue and critical path are unavailable.\n\nCollector operational panels separately observe downstream failures and queue pressure on this local Collector. Open a trace, then the run ID's **Actions run** or **Manifest artifacts** link. The latter opens the artifact list: match the persisted evidence digest. Pre-Collector Toolkit delivery status remains consumer-local; see the boundary notice.", 0, 5)]
-    metric_count = sum(item["language"] == "promql" for item in contract["queries"])
-    notice_y = 5 + 8 * ((metric_count + 1) // 2)
+
+def query_panels(queries, metric_y, trace_y):
+    """Metric panels in two columns from ``metric_y``; trace tables stacked from ``trace_y``."""
+    panels = []
     metric_index = trace_index = 0
-    for item in contract["queries"]:
+    for item in queries:
         trace = item["language"] == "traceql"
         source = {"type": "tempo" if trace else "prometheus", "uid": "local-tempo" if trace else "local-prometheus"}
         target = {"refId": "A", "datasource": source}
@@ -25,38 +35,75 @@ def dashboard(contract):
             target.update(query=item["query"], queryType="traceql", tableType="spans", limit=20, spss=1)
         else:
             target.update(expr=item["query"], editorMode="code", range=True, instant=False, legendFormat="__auto")
-        panel = {"id": item["panel_id"], "title": item["title"], "description": item["description"], "type": "table" if trace else "timeseries", "datasource": source, "targets": [target], "gridPos": {"x": 0 if trace else metric_index % 2 * 12, "y": notice_y + 5 + trace_index * 10 if trace else 5 + metric_index // 2 * 8, "w": 24 if trace else 12, "h": 10 if trace else 8}, "fieldConfig": {"defaults": {"unit": item["unit"], "noValue": "No telemetry", "custom": {}}, "overrides": []}, "options": {"showHeader": True} if trace else {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "single"}}}
+        panel = {"id": item["panel_id"], "title": item["title"], "description": item["description"], "type": "table" if trace else "timeseries", "datasource": source, "targets": [target], "gridPos": {"x": 0 if trace else metric_index % 2 * 12, "y": trace_y + trace_index * 10 if trace else metric_y + metric_index // 2 * 8, "w": 24 if trace else 12, "h": 10 if trace else 8}, "fieldConfig": {"defaults": {"unit": item["unit"], "noValue": "No telemetry", "custom": {}}, "overrides": []}, "options": {"showHeader": True} if trace else {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "single"}}}
         if trace:
             panes = {"trace": {"datasource": "local-tempo", "queries": [{"refId": "A", "queryType": "traceql", "query": "TRACE_ID"}], "range": {"from": "now-1h", "to": "now"}}}
             trace_url = "/explore?schemaVersion=1&panes=" + quote(json.dumps(panes, separators=(",", ":")), safe="").replace("TRACE_ID", "${__value.raw:percentencode}")
-            run_url = "https://github.com/YRootLab/OnMaru-backend/actions/runs/${__value.raw:percentencode}"
             panel["fieldConfig"]["overrides"] = [
                 {"matcher": {"id": "byName", "options": "traceIdHidden"}, "properties": [{"id": "custom.hideFrom", "value": {"viz": False}}, {"id": "displayName", "value": "Trace ID"}, {"id": "links", "value": [{"title": "Tempo trace", "url": trace_url, "targetBlank": True}]}]},
-                {"matcher": {"id": "byName", "options": "cicd.pipeline.run.id"}, "properties": [{"id": "links", "value": [{"title": "Actions run", "url": run_url, "targetBlank": True}, {"title": "Manifest artifacts", "url": run_url + "#artifacts", "targetBlank": True}]}]},
+                {"matcher": {"id": "byName", "options": "cicd.pipeline.run.id"}, "properties": [{"id": "links", "value": [{"title": "Actions run", "url": RUN_LINK, "targetBlank": True}, {"title": "Manifest artifacts", "url": RUN_LINK + "#artifacts", "targetBlank": True}]}]},
             ]
         panels.append(panel)
         if trace:
             trace_index += 1
         else:
             metric_index += 1
-    panels.append(text(16, "Delivery boundary · Toolkit → Collector → backends", "**Collector panels measure downstream exporter activity, not the pre-Collector Toolkit HTTP path.** Toolkit `ExportResult.status`, `reason`, `pending_batches`, `terminal_partial_batches` and acknowledgement timestamps remain consumer-local and cannot be observed through the same failed channel. Preserve those diagnostics and the original CI conclusion independently.\n\nQueue utilization and in-flight requests are backlog/lag proxies, not seconds. Exact end-to-end lag = acknowledgement − source completion; unavailable timestamps mean unknown. The Prometheus pull exporter's accepted-point count is not proof of scrape/retention. Self-scrape must be up before zero observed failures is shown; an idle never-used exporter has no failure baseline.", notice_y, 5))
-    return {"id": None, "uid": "toolkit-ci-benchmark", "title": "Toolkit CI benchmark observations", "description": "Generated by scripts/build_ci_dashboard.py from observability/queries/ci-benchmark.json. Evidence and telemetry contracts v1.", "tags": ["ci", "pipeline-toolkit"], "timezone": "utc", "schemaVersion": 39, "version": 1, "editable": False, "refresh": "30s", "time": {"from": "now-1h", "to": "now"}, "timepicker": {"refresh_intervals": ["30s", "1m", "5m"]}, "templating": {"list": []}, "annotations": {"list": []}, "links": [], "panels": sorted(panels, key=lambda panel: panel["id"])}
+    return panels, metric_index
+
+
+def build(contract, *, uid, title, description, intro, boundary):
+    panels = [text(1, intro[0], intro[1], 0, 5)]
+    metric_count = sum(item["language"] == "promql" for item in contract["queries"])
+    notice_y = 5 + 8 * ((metric_count + 1) // 2)
+    query, _ = query_panels(contract["queries"], 5, notice_y + 5)
+    panels.extend(query)
+    boundary_id = max(item["panel_id"] for item in contract["queries"]) + 1
+    panels.append(text(boundary_id, boundary[0], boundary[1], notice_y, 5))
+    return {"id": None, "uid": uid, "title": title, "description": description, "tags": ["ci", "pipeline-toolkit"], "timezone": "utc", "schemaVersion": 39, "version": 1, "editable": False, "refresh": "30s", "time": {"from": "now-1h", "to": "now"}, "timepicker": {"refresh_intervals": ["30s", "1m", "5m"]}, "templating": {"list": []}, "annotations": {"list": []}, "links": [], "panels": sorted(panels, key=lambda panel: panel["id"])}
+
+
+def dashboard(contract):
+    return build(
+        contract,
+        uid="toolkit-ci-benchmark",
+        title="Toolkit CI benchmark observations",
+        description="Generated by scripts/build_ci_dashboard.py from observability/queries/ci-benchmark.json. Evidence and telemetry contracts v1.",
+        intro=("CI observations · source evidence stays authoritative", "Fixed metric scope: **ci / test**, trace repository: **YRootLab/OnMaru-backend**. Duration panels show exported histogram snapshot means, not percentiles or three-run comparisons. Outcome/quality/work are gauges; never interpret scrape samples as cumulative run totals. Missing data is unknown. Traces reconstruct observed job windows; workflow wall-clock, queue and critical path are unavailable.\n\nCollector operational panels separately observe downstream failures and queue pressure on this local Collector. Open a trace, then the run ID's **Actions run** or **Manifest artifacts** link. The latter opens the artifact list: match the persisted evidence digest. Pre-Collector Toolkit delivery status remains consumer-local; see the boundary notice."),
+        boundary=("Delivery boundary · Toolkit → Collector → backends", "**Collector panels measure downstream exporter activity, not the pre-Collector Toolkit HTTP path.** Toolkit `ExportResult.status`, `reason`, `pending_batches`, `terminal_partial_batches` and acknowledgement timestamps remain consumer-local and cannot be observed through the same failed channel. Preserve those diagnostics and the original CI conclusion independently.\n\nQueue utilization and in-flight requests are backlog/lag proxies, not seconds. Exact end-to-end lag = acknowledgement − source completion; unavailable timestamps mean unknown. The Prometheus pull exporter's accepted-point count is not proof of scrape/retention. Self-scrape must be up before zero observed failures is shown; an idle never-used exporter has no failure baseline."),
+    )
+
+
+def performance_dashboard(contract):
+    return build(
+        contract,
+        uid="toolkit-ci-performance",
+        title="Toolkit CI layer performance",
+        description="Generated by scripts/build_ci_dashboard.py from observability/queries/ci-performance.json. Layer telemetry (onmaru_ci_*) and nested Tempo traces.",
+        intro=("CI layer performance · snapshot, not cohort", "Metric scope: **workflow=ci**. Histograms and gauges describe the latest retained execution per label set. Quantiles are estimates from that snapshot, not cohort p95 (insufficient samples until the cohort store exists). Never apply rate() to these gauges. Metric labels are finite categories; SHA, PR, run URL and test names live only in traces and manifests.\n\nMissing measurements are shown as **No telemetry**, never zero. Context, container and Flyway spans sit inside the tests span as an unverified waterfall; their durations are not added to test time. Critical path is unavailable (no causal graph)."),
+        boundary=("Source verdict vs export · boundary", "The source verdict is the Actions conclusion. Export status is a separate local Toolkit result and cannot change it. Open a trace, then use **Actions run** or **Manifest artifacts** to reach the same run. Match the manifest digest before relying on an artifact. Collector panels show downstream health only; a failed export does not alter the trace's result."),
+    )
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    contract = json.loads((ROOT / "observability/queries/ci-benchmark.json").read_text())
-    result = json.dumps(dashboard(contract), indent=2, ensure_ascii=False) + "\n"
-    path = ROOT / "observability/dashboards/ci-benchmark.json"
-    if args.check:
-        if not path.is_file() or path.read_text() != result:
-            print("Dashboard is stale; run python3 scripts/build_ci_dashboard.py", file=sys.stderr)
-            return 1
-    else:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(result)
+    builders = {"ci-benchmark": dashboard, "ci-performance": performance_dashboard}
+    stale = []
+    for query_path, output_path in TARGETS:
+        contract = json.loads((ROOT / query_path).read_text())
+        build_fn = builders[Path(output_path).stem]
+        result = json.dumps(build_fn(contract), indent=2, ensure_ascii=False) + "\n"
+        path = ROOT / output_path
+        if args.check:
+            if not path.is_file() or path.read_text() != result:
+                stale.append(output_path)
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(result)
+    if stale:
+        print("Dashboard is stale; run python3 scripts/build_ci_dashboard.py: " + ", ".join(stale), file=sys.stderr)
+        return 1
     return 0
 
 

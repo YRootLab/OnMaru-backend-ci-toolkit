@@ -8,8 +8,13 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
+from pipeline_toolkit.contracts.performance_evidence import LAYER_NAMES, parse_envelope_text
+from pipeline_toolkit.normalize.performance import LOGICAL_JOB_IDS, MANIFEST_SCHEMA, OTHER_JOB
 from pipeline_toolkit.security import redact
-from .model import EvidenceIdentity, MetricPoint, MetricPolicy, SpanRecord, TelemetryBundle, OUTCOMES, QUALITIES
+from .model import (CACHE_RESULTS, EMITTED_LAYER_METRICS, EVENTS, ONMARU_BOUNDS, OUTCOMES, QUALITIES, TEST_TYPES,
+                    BudgetExceeded, EvidenceIdentity, MetricPoint, MetricPolicy, SpanRecord, TelemetryBudget, TelemetryBundle)
+
+LANES = frozenset(LOGICAL_JOB_IDS | {OTHER_JOB})
 
 MAX_EVIDENCE_BYTES = 16 * 1024 * 1024
 MAX_OBSERVATIONS = 8192
@@ -236,3 +241,198 @@ def transform_actions_evidence(evidence: dict, policy: MetricPolicy, *, observed
     points = tuple(MetricPoint(name, "s" if name.endswith("_seconds") else "1", tuple(values) if kind == "histogram" else (sum(values),), dict(labels), metric_time, kind, window[0] if window else None)
                    for (name, kind, labels), values in sorted(grouped.items()))
     return TelemetryBundle(identity, points, tuple(spans), tuple(sorted(set(issues))), evidence["run"].get("conclusion"))
+
+
+# ---------------------------------------------------------------------------
+# Layer telemetry from normalized-execution/1 manifests (onmaru_ci_* metrics).
+# ---------------------------------------------------------------------------
+
+LAYER_CACHE_RESULT = {"warm": "hit", "cold": "miss", "partial": "partial", "invalidated": "invalidated",
+                      "disabled": "disabled", "unknown": "unknown"}
+NESTED_TIMINGS = ("context_init", "container_prepare", "flyway")
+_NS_PER_MS = 1_000_000
+
+
+def _manifest_digest_ok(manifest):
+    unsigned = {key: value for key, value in manifest.items() if key != "manifest_digest"}
+    canonical = json.dumps(unsigned, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
+    return manifest.get("manifest_digest") == "sha256:" + hashlib.sha256(canonical).hexdigest()
+
+
+def _check_label(name, value, allowed):
+    if value not in allowed:
+        raise ValueError(f"label value outside its finite catalog: {name}")
+    return value
+
+
+def transform_layer_evidence(manifest: dict, policy: MetricPolicy, *, event: str, lane: str,
+                             test_type: str = "unknown", performance_bytes: bytes | None = None,
+                             observed_at_ns: int, budget: TelemetryBudget | None = None) -> TelemetryBundle:
+    """Project one normalized execution onto bounded onmaru_ci metrics and nested spans.
+
+    * Metric labels are finite catalogs only. SHA, PR, run URL and test names are
+      trace/manifest attributes.
+    * Performance numbers come only from the envelope whose digest the manifest
+      records. Missing measurements are omitted, never reported as zero.
+    * Context/container/Flyway spans are placed at the start of the ``tests``
+      span and clipped to its duration. Their placement is marked unverified
+      because the envelope has no causal graph. No sum of nested time is emitted.
+    * The workflow span result is the source verdict. Export status is not part
+      of this bundle and cannot change it.
+    """
+    budget = budget or TelemetryBudget()
+    if not isinstance(manifest, dict) or manifest.get("schema") != MANIFEST_SCHEMA or not _manifest_digest_ok(manifest):
+        raise ValueError("normalized execution manifest is missing or was modified")
+    _check_label("event", event, EVENTS)
+    _check_label("lane", lane, LANES)
+    _check_label("test_type", test_type, TEST_TYPES)
+    if type(observed_at_ns) is not int or not 0 < observed_at_ns < 2 ** 64:
+        raise ValueError("observed_at_ns must be a positive OTLP timestamp")
+
+    identity_source = manifest["identity"]
+    performance = manifest["performance"]
+    envelope = None
+    if performance["status"] == "joined":
+        if not isinstance(performance_bytes, bytes):
+            raise ValueError("joined performance evidence requires its artifact bytes")
+        if "sha256:" + hashlib.sha256(performance_bytes).hexdigest() != performance["artifact"]["digest"]:
+            raise ValueError("performance artifact digest does not match the manifest")
+        envelope = parse_envelope_text(performance_bytes.decode("utf-8"))
+        source = envelope["source"]
+        if (source["repository"] != identity_source["repository"] or source["workflow_run_id"] != str(identity_source["run_id"])
+                or source["run_attempt"] != identity_source["run_attempt"] or source["commit_sha"] != identity_source["commit_sha"]
+                or envelope["quality"] != performance["quality"]):
+            raise ValueError("performance envelope does not match the manifest identity")
+    elif performance_bytes is not None:
+        raise ValueError("performance bytes were supplied without a joined manifest")
+
+    identity = EvidenceIdentity(identity_source["repository"], identity_source["run_id"],
+                                identity_source["run_attempt"], manifest["manifest_digest"])
+    clock = manifest["clock"]
+    window_start = _ns(clock["job_window_start"]) if clock["job_window_start"] else None
+    window_end = _ns(clock["job_window_end"]) if clock["job_window_end"] else None
+    if (window_start is None) != (window_end is None) or (window_start is not None and window_end < window_start):
+        raise ValueError("manifest job window is inconsistent")
+    metric_time = window_end if window_end is not None else observed_at_ns
+    metric_start = window_start
+    verdict = _outcome(manifest["source"]["verdict"])
+    workflow = policy.workflow
+
+    grouped = {}
+
+    def add(name, value, **labels):
+        instrument, unit, allowed = EMITTED_LAYER_METRICS[name]
+        if set(labels) != set(allowed) - {"workflow"}:
+            raise ValueError("onmaru metric labels do not match its registry")
+        for key, item in labels.items():
+            if len(item) > budget.max_label_value_length:
+                raise BudgetExceeded("label value exceeds budget")
+            if key == "lane":
+                _check_label(key, item, LANES)
+            elif key == "event":
+                _check_label(key, item, EVENTS)
+            elif key == "test_type":
+                _check_label(key, item, TEST_TYPES)
+            elif key == "cache_result":
+                _check_label(key, item, CACHE_RESULTS)
+            elif key == "result":
+                _check_label(key, item, OUTCOMES)
+        labels = {"workflow": workflow, **labels}
+        grouped.setdefault((name, tuple(sorted(labels.items()))), []).append(float(value))
+        if len(grouped) > budget.max_series:
+            raise BudgetExceeded("metric series budget exceeded")
+
+    if window_start is not None:
+        add("onmaru_ci_workflow_duration_seconds", manifest["metrics"]["observed_job_window_seconds"], event=event, result=verdict)
+    for job in manifest["jobs"]:
+        if job["duration_seconds"] is None:
+            continue
+        job_lane = job["logical_id"] if job["logical_id"] in LANES else OTHER_JOB
+        add("onmaru_ci_job_duration_seconds", job["duration_seconds"], lane=job_lane, result=_outcome(job["conclusion"]))
+
+    timings = {}
+    if envelope is not None:
+        timings = {name: value for name, value in (envelope.get("timings_ms") or {}).items() if value is not None}
+        if "gradle_task" in timings:
+            add("onmaru_ci_gradle_task_duration_seconds", timings["gradle_task"] / 1000, lane=lane)
+        if "container_prepare" in timings:
+            add("onmaru_ci_testcontainers_startup_seconds", timings["container_prepare"] / 1000, lane=lane)
+        if envelope["selected"]["count"] is not None:
+            add("onmaru_ci_tests_selected_total", envelope["selected"]["count"], lane=lane, test_type=test_type)
+        if envelope["execution"]["executed_now"] is not None:
+            add("onmaru_ci_tests_executed_total", envelope["execution"]["executed_now"], lane=lane, test_type=test_type)
+        # Only complete or partial envelopes carry layer states; unavailable and legacy do not.
+        if envelope["quality"] in ("complete", "partial"):
+            layers = envelope["cache"]["cacheIdentity"]["layers"]
+            tally = defaultdict(int)
+            for name in LAYER_NAMES:
+                state = layers[name]["state"] if name in layers else "unknown"
+                tally[LAYER_CACHE_RESULT.get(state, "unknown")] += 1
+            for cache_result in sorted(tally):
+                add("onmaru_ci_build_cache_operations_total", tally[cache_result], lane=lane, cache_result=cache_result)
+
+    points = []
+    for (name, labels), values in sorted(grouped.items()):
+        instrument, unit, _ = EMITTED_LAYER_METRICS[name]
+        if instrument == "gauge":
+            values = (sum(values),)
+        points.append(MetricPoint(name, unit, tuple(values), dict(labels), metric_time,
+                                  instrument, None if instrument == "gauge" else metric_start,
+                                  ONMARU_BOUNDS if instrument == "histogram" else ()))
+
+    spans = []
+    if window_start is not None:
+        trace_id = hashlib.sha256(("toolkit-ci-layer-v1:" + identity.key).encode()).hexdigest()[:32]
+        window_len = window_end - window_start
+        url = manifest["source"]["run_url"]
+        common = {"toolkit.ci.reconstructed": True, "vcs.repository.name": identity.repository,
+                  "vcs.ref.head.revision": identity_source["commit_sha"], "cicd.pipeline.name": workflow,
+                  "cicd.pipeline.run.id": str(identity.run_id), "toolkit.ci.run.attempt": identity.attempt,
+                  "toolkit.ci.manifest.digest": identity.manifest_digest, "toolkit.ci.event": event,
+                  "toolkit.ci.clock_alignment": clock["alignment"]}
+        try:
+            parsed = urlsplit(url) if isinstance(url, str) else None
+            if parsed and parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password and not parsed.query and not parsed.fragment:
+                common["cicd.pipeline.run.url.full"] = url
+        except ValueError:
+            pass
+
+        def span_id(key):
+            return hashlib.sha256((trace_id + ":" + key).encode()).hexdigest()[:16]
+
+        def emit(name, key, parent, start, end, attributes, status):
+            if len(spans) >= budget.max_spans:
+                raise BudgetExceeded("span budget exceeded")
+            attributes = dict(common, **attributes)
+            if len(attributes) > budget.max_span_attributes:
+                raise BudgetExceeded("span attribute budget exceeded")
+            spans.append(SpanRecord(name, trace_id, span_id(key), parent, start, end, attributes, status, 1))
+            return span_id(key)
+
+        workflow_span = emit("RUN " + workflow, "run", None, window_start, window_end,
+                             {"toolkit.ci.scope": "layer-run", "toolkit.ci.source_conclusion": manifest["source"]["conclusion"] or "unknown",
+                              "toolkit.ci.source_verdict": manifest["source"]["verdict"], "cicd.pipeline.result": verdict,
+                              "cicd.pipeline.action.name": "RUN", "toolkit.ci.timing": "observed_job_window"},
+                             2 if verdict in {"failure", "error", "timeout"} else 1 if verdict == "success" else 0)
+        if "tests" in timings:
+            tests_raw = int(round(timings["tests"] * _NS_PER_MS))
+            tests_len = min(tests_raw, window_len)
+            tests_span = emit("tests", "tests", workflow_span, window_start, window_start + tests_len,
+                              {"toolkit.ci.scope": "layer", "toolkit.ci.placement": "unverified", "toolkit.ci.clipped": tests_raw > window_len,
+                               "toolkit.ci.lane": lane, "toolkit.ci.source_duration_ms": timings["tests"]}, 0)
+            for name in NESTED_TIMINGS:
+                if name not in timings:
+                    continue
+                raw = int(round(timings[name] * _NS_PER_MS))
+                nested_len = min(raw, tests_len)
+                emit(name, name, tests_span, window_start, window_start + nested_len,
+                     {"toolkit.ci.scope": "layer", "toolkit.ci.nested_in": "tests", "toolkit.ci.placement": "unverified",
+                      "toolkit.ci.clipped": raw > tests_len, "toolkit.ci.lane": lane, "toolkit.ci.source_duration_ms": timings[name]}, 0)
+        if "gradle_task" in timings:
+            raw = int(round(timings["gradle_task"] * _NS_PER_MS))
+            emit("gradle_task", "gradle_task", workflow_span, window_start, window_start + min(raw, window_len),
+                 {"toolkit.ci.scope": "layer", "toolkit.ci.placement": "unverified", "toolkit.ci.clipped": raw > window_len,
+                  "toolkit.ci.lane": lane, "toolkit.ci.source_duration_ms": timings["gradle_task"]}, 0)
+
+    return TelemetryBundle(identity, tuple(points), tuple(spans), tuple(sorted(set(manifest["quality"]["issues"]))),
+                           manifest["source"]["conclusion"])
