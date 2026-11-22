@@ -1,0 +1,8 @@
+{
+  "run": {"id": 24712345678, "run_attempt": 1, "status": "completed", "conclusion": "success", "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "html_url": "https://github.com/YRootLab/OnMaru-backend/actions/runs/24712345678", "repository": {"full_name": "YRootLab/OnMaru-backend"}},
+  "jobs": {"total_count": 3, "jobs": [
+    {"id": 801, "run_id": 24712345678, "run_attempt": 1, "name": "[spring-full] 스프링 전체 테스트", "status": "completed", "conclusion": "success", "started_at": "2026-11-20T02:59:00Z", "completed_at": "2026-11-20T03:04:00Z", "steps": []},
+    {"id": 802, "run_id": 24712345678, "run_attempt": 1, "name": "[spring-affected] 영향받는 테스트", "status": "completed", "conclusion": "success", "started_at": "2026-11-20T02:59:30Z", "completed_at": "2026-11-20T03:02:00Z", "steps": []},
+    {"id": 803, "run_id": 24712345678, "run_attempt": 1, "name": "build", "status": "completed", "conclusion": "success", "started_at": "2026-11-20T02:58:00Z", "completed_at": "2026-11-20T02:58:30Z", "steps": []}
+  ]}
+}
