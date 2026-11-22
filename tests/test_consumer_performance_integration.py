@@ -429,9 +429,6 @@ def test_executable_looking_payload_is_rejected_fail_closed():
     assert refused["performance_artifacts"][0]["reason"] == "invalid_envelope"
 
 
-@pytest.mark.xfail(strict=True, reason="known gap: ingest checks only the artifact name pattern, so "
-                                       "an executable-looking name such as ci-performance-evidence.sh "
-                                       "carrying a valid envelope is accepted")
 def test_executable_suffix_on_artifact_name_is_rejected():
     scenario = _load("success")
     manifest = normalize_execution(_timeline(scenario),

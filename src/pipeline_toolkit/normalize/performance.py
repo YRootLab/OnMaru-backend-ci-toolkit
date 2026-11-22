@@ -48,7 +48,7 @@ LOGICAL_JOB_IDS = frozenset({
     "required-verdict",
 })
 _MARKER = re.compile(r"\[([a-z][a-z0-9-]{0,63})\]")
-_ARTIFACT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
+_ARTIFACT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\Z")
 
 
 def map_job_name(name: Any) -> tuple[str, str]:
