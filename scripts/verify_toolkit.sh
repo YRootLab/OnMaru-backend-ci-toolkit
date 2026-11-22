@@ -18,4 +18,8 @@ fi
 
 python3 scripts/verify_workflow_security.py
 
+# Live docs: internal links and anchors, referenced paths, figure alt text and captions.
+# The D2-to-SVG byte drift check runs only when the pinned d2 is installed (see the script header).
+python3 scripts/check_pipeline_docs.py
+
 echo "Toolkit verification passed."

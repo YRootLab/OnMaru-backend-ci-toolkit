@@ -1,5 +1,7 @@
 # Actions evidence to OTLP v1
 
+> Architecture: [OTLP, replay and duplicate suppression](../architecture/telemetry-replay.md), [export failure lifecycle](../diagrams/failure-replay.svg). The `job` to `ci_job` label change is listed in the [terminology migration](../architecture/migration.md).
+
 Related: [Toolkit #120](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/120), [Actions evidence v1](actions-timeline.md), [observability policy](../reports/2026-10-01-ci-benchmark-observability-policy.md).
 
 The optional consumer post-run process transforms a persisted Actions evidence manifest into metrics and reconstructed traces. It runs no tests, executes no artifact content and changes no required CI verdict. The original manifest and Actions diagnostics remain authoritative. The existing `TelemetryEvent` API remains compatible.
