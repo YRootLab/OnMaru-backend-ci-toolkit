@@ -5,6 +5,7 @@ OTLP does not provide an end-to-end exactly-once delivery guarantee.
 """
 from __future__ import annotations
 
+import bisect
 import hashlib
 import http.client
 import json
@@ -141,9 +142,14 @@ def _payload(signal, items):
             if point.kind == "histogram":
                 if point.start_ns is not None:
                     data["startTimeUnixNano"] = str(point.start_ns)
+                # Bucket i holds (bounds[i-1], bounds[i]]; the last bucket is open-ended.
+                # With no explicit bounds this is the single-bucket snapshot shape.
+                counts = [0] * (len(point.bounds) + 1)
+                for value in point.values:
+                    counts[bisect.bisect_left(point.bounds, value)] += 1
                 data.update({"count": str(len(point.values)),
                              "sum": sum(point.values), "min": min(point.values), "max": max(point.values),
-                             "explicitBounds": [], "bucketCounts": [str(len(point.values))]})
+                             "explicitBounds": list(point.bounds), "bucketCounts": [str(count) for count in counts]})
             else:
                 data["asDouble"] = sum(point.values)
             metrics[key][point.kind]["dataPoints"].append(data)
@@ -247,7 +253,11 @@ def http_transport(url, body, headers, timeout):
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise TimeoutError("response deadline exceeded")
-                socket.settimeout(remaining)
+                try:
+                    if socket is not None and socket.fileno() != -1:
+                        socket.settimeout(remaining)
+                except OSError:
+                    pass
                 part = response.read1(min(4096, MAX_RESPONSE_BYTES + 1 - len(raw)))
                 if not part:
                     return HttpResponse(response.status, bytes(raw), dict(response.headers))

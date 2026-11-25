@@ -1,0 +1,55 @@
+{
+  "cache": {
+    "cacheIdentity": {
+      "layers": {},
+      "seedProvenance": {
+        "seed_input_digest": null,
+        "seeded": null
+      }
+    },
+    "experiment_class": "unknown",
+    "policy_digest": null
+  },
+  "clock": {
+    "uncertainty_ms": null,
+    "utc_anchor": "2026-11-20T03:00:00.000Z"
+  },
+  "execution": {
+    "executed_now": null,
+    "verified_from_cache": null
+  },
+  "producer": {
+    "name": "onmaru-ci-performance-writer",
+    "version": "0.1.0"
+  },
+  "quality": "unavailable",
+  "schema": "ci-performance-evidence/1.0",
+  "selected": {
+    "count": null,
+    "digest": null
+  },
+  "source": {
+    "commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "repository": "YRootLab/OnMaru-backend",
+    "run_attempt": 1,
+    "workflow": "verify",
+    "workflow_run_id": "24712345678"
+  },
+  "test_universe": {
+    "digest": null,
+    "size": null
+  },
+  "timings_ms": {
+    "container_prepare": null,
+    "context_init": null,
+    "flyway": null,
+    "gradle_task": null,
+    "tests": null
+  },
+  "toolchain": {
+    "gradle_version": "9.7.1",
+    "java_version": "21.0.8",
+    "python_version": "3.12.11",
+    "runner_image": "ubuntu-24.04@sha256:runner"
+  }
+}

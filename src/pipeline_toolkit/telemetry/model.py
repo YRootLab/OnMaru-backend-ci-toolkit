@@ -45,6 +45,51 @@ CI_LABELS = frozenset({"workflow", "environment", "ci_job", "module", "scope", "
 OUTCOMES = frozenset({"success", "failure", "cancellation", "timeout", "skip", "error", "unknown", "incomplete"})
 QUALITIES = frozenset({"available", "unavailable", "complete", "partial", "invalid", "missing"})
 
+# Layer telemetry (onmaru_ci_*) uses its own finite label set. Identity values
+# (SHA, PR number, run URL, test class) are trace/manifest attributes only.
+ONMARU_LABELS = frozenset({"workflow", "lane", "test_type", "cache_result", "module", "event", "result"})
+TEST_TYPES = frozenset({"affected", "full", "unknown"})
+CACHE_RESULTS = frozenset({"hit", "miss", "partial", "invalidated", "disabled", "unknown"})
+EVENTS = frozenset({"pull_request", "push", "schedule", "workflow_dispatch", "merge_group", "other"})
+# Explicit OTel bucket upper bounds (seconds) for onmaru_ci histograms.
+ONMARU_BOUNDS = (1.0, 5.0, 15.0, 30.0, 60.0, 120.0, 300.0, 600.0, 900.0, 1800.0, 3600.0)
+# name -> (instrument, unit, allowed labels). Snapshot counts are gauges so that
+# no consumer applies rate() to a per-run value.
+EMITTED_LAYER_METRICS = {
+    "onmaru_ci_workflow_duration_seconds": ("histogram", "s", frozenset({"workflow", "event", "result"})),
+    "onmaru_ci_job_duration_seconds": ("histogram", "s", frozenset({"workflow", "lane", "result"})),
+    "onmaru_ci_gradle_task_duration_seconds": ("histogram", "s", frozenset({"workflow", "lane"})),
+    "onmaru_ci_testcontainers_startup_seconds": ("histogram", "s", frozenset({"workflow", "lane"})),
+    "onmaru_ci_build_cache_operations_total": ("gauge", "1", frozenset({"workflow", "lane", "cache_result"})),
+    "onmaru_ci_tests_selected_total": ("gauge", "1", frozenset({"workflow", "lane", "test_type"})),
+    "onmaru_ci_tests_executed_total": ("gauge", "1", frozenset({"workflow", "lane", "test_type"})),
+}
+# Named in the issue but not derivable from ci-performance-evidence/1.0 (no count
+# or byte fields). They are never emitted, so dashboards show no telemetry rather than zero.
+UNAVAILABLE_LAYER_METRICS = frozenset({
+    "onmaru_ci_gradle_tasks_total", "onmaru_ci_build_cache_bytes", "onmaru_ci_spring_context_loads_total",
+    "onmaru_ci_affected_fallback_total", "onmaru_ci_selection_mismatch_total",
+})
+
+
+class BudgetExceeded(ValueError):
+    """Raised instead of silently truncating a metric or trace observation."""
+
+
+@dataclass(frozen=True)
+class TelemetryBudget:
+    max_series: int = 256
+    max_spans: int = 64
+    max_span_attributes: int = 48
+    max_label_value_length: int = 64
+
+    def __post_init__(self) -> None:
+        for name, low, high in (("max_series", 1, 4096), ("max_spans", 1, 512),
+                                ("max_span_attributes", 1, 128), ("max_label_value_length", 1, 128)):
+            value = getattr(self, name)
+            if type(value) is not int or not low <= value <= high:
+                raise ValueError("invalid telemetry budget: " + name)
+
 
 def _label(value: str) -> bool:
     return isinstance(value, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{0,63}", value) is not None and re.fullmatch(r"[0-9a-f]{40,64}", value) is None
@@ -99,18 +144,30 @@ class MetricPoint:
     time_ns: int
     kind: str = "histogram"
     start_ns: int | None = None
+    bounds: tuple[float, ...] = ()
 
     def __post_init__(self) -> None:
-        if not re.fullmatch(r"toolkit_ci_[a-z_]+", self.name) or self.kind not in {"gauge", "histogram"}:
+        if not re.fullmatch(r"(toolkit|onmaru)_ci_[a-z_]+", self.name) or self.kind not in {"gauge", "histogram"}:
             raise ValueError("invalid CI metric")
-        if set(self.labels) - CI_LABELS or any(not _label(value) for value in self.labels.values()):
+        allowed = ONMARU_LABELS if self.name.startswith("onmaru_") else CI_LABELS
+        if set(self.labels) - allowed or any(not _label(value) for value in self.labels.values()):
             raise ValueError("metric label is not allowed")
+        if self.name.startswith("onmaru_"):
+            instrument, unit, names = EMITTED_LAYER_METRICS.get(self.name, (None, None, None))
+            if instrument is None or instrument != self.kind or unit != self.unit or set(self.labels) - names:
+                raise ValueError("onmaru metric does not match its registered contract")
+        if self.bounds and (self.kind != "histogram" or any(type(b) not in (int, float) or not math.isfinite(b) for b in self.bounds)
+                            or any(b <= a for a, b in zip(self.bounds, self.bounds[1:])) or len(self.bounds) > 64):
+            raise ValueError("invalid explicit histogram bounds")
+        object.__setattr__(self, "bounds", tuple(float(b) for b in self.bounds))
         if self.labels.get("quality", "complete") not in QUALITIES or self.labels.get("outcome", "unknown") not in OUTCOMES:
             raise ValueError("metric label value is not allowed")
         if self.unit not in {"s", "1"} or type(self.time_ns) is not int or not 0 < self.time_ns < 2 ** 64:
             raise ValueError("invalid metric unit or timestamp")
         if self.start_ns is not None and (type(self.start_ns) is not int or not 0 < self.start_ns <= self.time_ns):
             raise ValueError("invalid metric start timestamp")
+        if self.kind == "gauge" and len(self.values) != 1:
+            raise ValueError("gauge points carry exactly one value")
         if not self.values or len(self.values) > 65536 or any(type(v) not in (int, float) or not 0 <= v <= 1e15 or not math.isfinite(v) for v in self.values):
             raise ValueError("metric values must be bounded and finite")
         object.__setattr__(self, "values", tuple(float(v) for v in self.values))

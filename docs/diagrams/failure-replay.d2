@@ -1,0 +1,65 @@
+# Figure: export failure and replay lifecycle.
+# Legend: class "cur" = implemented; class "plan" = #139 target; class "verdict" = source CI verdict path, fixed and independent of export; class "stop" = terminal or blocked export state.
+# Node links point to repository evidence relative to docs/diagrams/.
+
+direction: down
+
+classes: {
+  cur: {
+    style.fill: "#e8f1ff"
+    style.stroke: "#1f4e79"
+    style.font-color: "#0b1f33"
+  }
+  plan: {
+    style.fill: "#fff7e0"
+    style.stroke: "#8a5a00"
+    style.stroke-dash: 5
+    style.font-color: "#3d2a00"
+  }
+  verdict: {
+    style.fill: "#eaf7ea"
+    style.stroke: "#2d6a2d"
+    style.font-color: "#103010"
+  }
+  stop: {
+    style.fill: "#fdecec"
+    style.stroke: "#8b1e1e"
+    style.font-color: "#3b0a0a"
+  }
+}
+
+legend: "Legend: blue = current; amber dashed = planned #139 target; green = source verdict (fixed); red = blocked or terminal export state" {
+  class: verdict
+}
+
+source: "Source CI completes" { class: verdict; link: ../../src/pipeline_toolkit/normalize/performance.py }
+verdictfixed: "Source verdict recorded; export cannot change it" { class: verdict }
+manifest: "Persist manifest, digest and collection time" { class: cur; link: ../../src/pipeline_toolkit/telemetry/export.py }
+lease: "Acquire lease in SQLiteReplayStore" { class: cur; link: ../../src/pipeline_toolkit/telemetry/export.py }
+busy: "Busy: another live lease, returns status busy" { class: stop }
+send: "POST batch (bounded retries on 429, 502, 503, 504, connection errors)" { class: cur }
+ack: "Full acknowledgement: checkpoint exact batch" { class: cur }
+partial: "Receiver partial rejection: terminal partial batch" { class: stop }
+failed: "Other HTTP errors or malformed ack: status failed, reason code" { class: stop }
+ambiguous: "Lost acknowledgement after send: duplicate possible" { class: stop }
+replay: "Replay with same manifest, observed_at_ns and destination" { class: cur }
+dup: "Acknowledged batches suppressed; no request for them" { class: cur }
+planmismatch: "Changed label, batch or serialization: replay_plan_mismatch" { class: stop }
+grafana: "Grafana: Collector failed attempts and queue pressure; pre-Collector adapter planned" { class: plan }
+
+source -> verdictfixed
+source -> manifest
+manifest -> lease
+lease -> busy: "live lease held"
+lease -> send: "lease acquired"
+send -> ack: "2xx with full ack"
+send -> partial: "2xx with partial rejection"
+send -> failed: "non-retryable status"
+send -> ambiguous: "timeout after send"
+ambiguous -> replay: "same manifest, later call"
+ack -> dup
+partial -> dup: "terminal, not resent blindly"
+failed -> replay: "retry within budget"
+replay -> planmismatch: "plan differs"
+replay -> send: "pending batches only"
+dup -> grafana: "exported state" { class: plan }

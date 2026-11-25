@@ -1,0 +1,80 @@
+# Figure: data lineage from consumer artifacts to Grafana panels.
+# Legend: class "cur" = implemented and fixture-tested in this repository; class "plan" = #139 target; class "gate" = rejects or quarantines before use.
+# Node links point to repository evidence relative to docs/diagrams/.
+
+direction: right
+
+classes: {
+  cur: {
+    style.fill: "#e8f1ff"
+    style.stroke: "#1f4e79"
+    style.font-color: "#0b1f33"
+  }
+  plan: {
+    style.fill: "#fff7e0"
+    style.stroke: "#8a5a00"
+    style.stroke-dash: 5
+    style.font-color: "#3d2a00"
+  }
+  gate: {
+    style.fill: "#eaf7ea"
+    style.stroke: "#2d6a2d"
+    style.font-color: "#103010"
+  }
+  zone: {
+    style.fill: "#f5f5f5"
+    style.stroke: "#555555"
+    style.font-color: "#111111"
+  }
+}
+
+legend: "Legend" {
+  class: zone
+  lc: "Current (implemented, fixture-tested)" { class: cur }
+  lp: "Planned: #139 target (live producer and Cloud)" { class: plan }
+  lg: "Gate: rejects or quarantines before use" { class: gate }
+}
+
+raw: "Raw inputs (untrusted)" {
+  class: zone
+  jobs: "Actions run and attempt jobs API pages" { class: cur }
+  mods: "module execution.json (versioned)" { class: cur }
+  env: "ci-performance-evidence/1.0 envelope" { class: cur }
+  envp: "Backend producer writes envelope" { class: plan }
+}
+
+validated: "Validation and normalization" {
+  class: zone
+  tl: "normalize_actions_timeline: sorted jobs and steps, timing quality" { class: cur }
+  gate1: "Run, attempt, SHA and toolkit_ref join gate" { class: gate }
+  pe: "parse_envelope_text: strict keys, layer states, no NaN" { class: cur }
+}
+
+products: "Products" {
+  class: zone
+  manifest: "normalized-execution/1 manifest with evidence digest" { class: cur }
+  compare: "performance-compare/1 report (offline)" { class: cur }
+  tele: "onmaru_ci metrics and spans (layer transform)" { class: cur }
+  otlp: "toolkit_ci workflow bundle (OTLP v1)" { class: cur }
+}
+
+sinks: "Storage and display" {
+  class: zone
+  replay: "SQLite replay store (consumer-owned)" { class: cur }
+  dash: "Grafana CI performance dashboard" { class: cur }
+  cloud: "Grafana Cloud Mimir and Tempo" { class: plan }
+}
+
+raw.jobs -> validated.tl
+raw.mods -> validated.gate1
+raw.env -> validated.pe
+raw.envp -> raw.env: "planned writer" { class: plan }
+validated.tl -> validated.gate1
+validated.gate1 -> products.manifest
+validated.pe -> products.manifest: "digest-bound bytes only"
+products.manifest -> products.compare
+products.manifest -> products.tele
+products.manifest -> products.otlp
+products.otlp -> sinks.replay: "checkpoint before retry"
+products.tele -> sinks.dash: "via Collector, Prometheus and Tempo"
+products.otlp -> sinks.cloud: "planned route" { class: plan }

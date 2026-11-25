@@ -12,10 +12,17 @@ python3 -c 'from pathlib import Path; files = sorted(Path("docs/decisions").glob
 
 if [ -f pyproject.toml ]; then
   python3 -m compileall -q src tests
+  test -s tests/test_consumer_performance_integration.py
+  test -s tests/fixtures/consumer-performance/success.json
+  PYTHONPATH=src python3 -m pytest -q tests/test_consumer_performance_integration.py
   PYTHONPATH=src python3 -m coverage run -m pytest -q
   python3 -m coverage report --include='src/pipeline_toolkit/*' --fail-under=90
 fi
 
 python3 scripts/verify_workflow_security.py
+
+# Live docs: internal links and anchors, referenced paths, figure alt text and captions.
+# The D2-to-SVG byte drift check runs only when the pinned d2 is installed (see the script header).
+python3 scripts/check_pipeline_docs.py
 
 echo "Toolkit verification passed."

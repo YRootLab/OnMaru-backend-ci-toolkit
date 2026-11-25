@@ -1,0 +1,72 @@
+# Figure: system context and trust boundaries.
+# Legend: class "cur" = implemented in this repository today; class "plan" = #139 target, not verified here.
+# Regenerate: python3 scripts/check_pipeline_docs.py --render (pinned d2 0.8.1, theme 0, pad 24).
+
+classes: {
+  cur: {
+    style.fill: "#e8f1ff"
+    style.stroke: "#1f4e79"
+    style.font-color: "#0b1f33"
+  }
+  plan: {
+    style.fill: "#fff7e0"
+    style.stroke: "#8a5a00"
+    style.stroke-dash: 5
+    style.font-color: "#3d2a00"
+  }
+  zone: {
+    style.fill: "#f5f5f5"
+    style.stroke: "#555555"
+    style.font-color: "#111111"
+  }
+}
+
+legend: "Legend" {
+  class: zone
+  lc: "Current: implemented in this repository" { class: cur }
+  lp: "Planned: #139 target, not verified here" { class: plan }
+}
+
+consumer: "Consumer trust zone: OnMaru-backend runner, secrets, test commands" {
+  class: zone
+  caller: "Caller CI workflow (owns triggers, cache, credentials)" { class: cur }
+  reusable: "module-benchmark.yml pinned to a 40-character SHA" { class: cur }
+  artifacts: "Bounded Actions artifacts (execution.json and envelope bytes)" { class: cur }
+  producer: "Backend collectors emit ci-performance-evidence/1.0" { class: plan }
+  exporter: "Post-run OTLP exporter step (optional, separate verdict)" { class: cur }
+}
+
+toolkit: "Toolkit trust zone: pinned checkout, no secrets, no command execution" {
+  class: zone
+  ingest: "Ingest: bounded JSON, duplicate-key rejection, identity join" { class: cur }
+  normalize: "Normalize: normalized-execution/1 manifest with digests" { class: cur }
+  compare: "Offline comparison: performance-compare/1 report" { class: cur }
+  transform: "Telemetry transform: onmaru_ci metrics and reconstructed spans" { class: cur }
+}
+
+observability: "Observability zone: exported observations only, no CI verdict authority" {
+  class: zone
+  collector: "OpenTelemetry Collector (local stack today)" { class: cur }
+  metrics: "Mimir-compatible metrics store" { class: cur }
+  traces: "Tempo traces" { class: cur }
+  grafana: "Grafana dashboards and drill-down links" { class: cur }
+  cloud: "Grafana Cloud tenant route and retention" { class: plan }
+}
+
+github: "GitHub Actions run pages and API (external, read by consumer)" { class: cur }
+
+consumer.caller -> consumer.reusable: "call at pinned SHA"
+consumer.reusable -> consumer.artifacts: "upload per-module evidence"
+consumer.producer -> consumer.artifacts: "write envelope (planned)" { class: plan }
+consumer.artifacts -> toolkit.ingest: "untrusted bytes, never executed"
+toolkit.ingest -> toolkit.normalize
+toolkit.normalize -> toolkit.compare
+toolkit.normalize -> toolkit.transform
+toolkit.transform -> consumer.exporter: "bundle in memory"
+consumer.exporter -> observability.collector: "OTLP/HTTP, bounded batches"
+observability.collector -> observability.metrics
+observability.collector -> observability.traces
+observability.metrics -> observability.grafana
+observability.traces -> observability.grafana
+observability.collector -> observability.cloud: "planned route" { class: plan }
+observability.grafana -> github: "drill-down link, no API call from Grafana"

@@ -1,9 +1,10 @@
 # Handoff
 
-Updated: 2026-10-04
+Updated: 2026-11-25
 
 ## Current work
 
+- [Toolkit #139](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/139): `feature/139-ci-performance-observability`. 통합 계층별 성능 관측·비교·파이프라인 아키텍처 문서 개선. 서브 이슈 #140(문서/D2/드리프트 검증), #141(contracts/1.0 envelope & cache identity), #142(ingest & bounded job catalog), #143(compare engine & cohort), #144(layer telemetry & Grafana dashboard), #145(consumer integration & negative suite)를 `integration/all-139`로 통합 완료. 수집 파일 확장자 보안 검증 및 coverage 경합 하의 command runner timeout 안정화 완료. 검증: `bash scripts/verify_toolkit.sh` 전체 통과 (795 passed, 93% coverage, workflow security 4개 통과, pipeline docs check 통과). 다음 단계: develop 대상 protected PR 오픈 및 CI 확인 후 머지.
 - [Toolkit #137](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/137): `fix/137-cloud-histogram-temporality`. 실제 Grafana Cloud 왕복에서 traces는 HTTP 200으로 수용됐지만 duration histogram metrics는 DELTA temporality/type 조합 때문에 HTTP 400으로 거부됐다. 완료된 CI 관측 snapshot을 CUMULATIVE histogram으로 직렬화하고 로컬/Cloud 회귀 검증 후 OnMaruBE #555를 재실행한다.
 - [Toolkit #135](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/135): `fix/135-bootstrap-integration-gate`. OnMaruBE #556의 실제 dispatch 완료 조건과 Toolkit의 closed-Issue 선행 gate 사이 순환을 해소한다. 일반 dispatch의 closed gate와 응답 유실 무재시도는 유지하고, 명시적인 최초 통합 검증 옵션만 audit 가능한 gate 상태와 함께 허용한다. 실제 OnMaruBE 통합 실행 전 테스트와 protected PR로 반영한다.
 - [Toolkit #133](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/133): `fix/133-observability-range-race`. Grafana outage range 검증을 기존 55초 retry budget 안에서 재시도해 Prometheus instant query와 2초 range 평가 경계 race를 제거하고, 각 요청에 남은 deadline을 적용하며 timeout/frame 진단에 현재 query key를 포함한다. Review RED 3건은 post-deadline 성공과 빈/error frame 진단 누락을 재현했다. Focused 18 passed; 실제 outage smoke는 failed spans `8704→9216`, queue `6.25%`, in-flight `10`을 관찰하고 Tempo 복구/drain 및 health 재검증을 통과했다. 전체 `bash scripts/verify_toolkit.sh`: 590 passed, coverage 93%, workflow security 4개 통과. 다음 단계: PR review; merge/Issue close는 수행하지 않는다.

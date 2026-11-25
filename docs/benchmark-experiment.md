@@ -1,5 +1,7 @@
 # 필요할 때 실행하는 Pipeline Benchmark Experiment
 
+> 아키텍처: [비교 가능성과 critical path](architecture/comparability.md). 아래 예시의 `environment_identity.cache_state` 문자열은 legacy 형식이며, 현재 계약의 구조화된 `cacheIdentity`와 대응은 [용어 migration](architecture/migration.md)을 참조하십시오.
+
 Toolkit #122는 OnMaruBE의 CI 또는 test 파이프라인 변경을 고정된 `develop`과 커밋된 `feature/*` HEAD로 비교하는 CLI 계약을 제공한다. 일반 PR·push와 배포에는 반복 benchmark를 추가하지 않는다. Python 3.9 이상에서 동작하며 `git`, 인증된 `gh`가 필요하다.
 
 ## 현재 통합 상태

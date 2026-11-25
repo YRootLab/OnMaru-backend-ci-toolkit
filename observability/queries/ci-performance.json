@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "metric_contract": "onmaru-ci-layer-v1",
+  "repository": "YRootLab/OnMaru-backend",
+  "queries": [
+    {
+      "key": "required_verify_p50", "panel_id": 2, "language": "promql", "unit": "s",
+      "title": "Required verify duration — p50 (latest snapshot)",
+      "description": "Histogram estimate over the latest retained required-verdict job snapshot. A single run per label set is not a cohort median; cohort p50/p95 requires the 14-day sample rule.",
+      "query": "histogram_quantile(0.5, sum by (le) (onmaru_ci_job_duration_seconds_bucket{workflow=\"ci\",lane=\"required-verdict\"}))"
+    },
+    {
+      "key": "required_verify_p95", "panel_id": 3, "language": "promql", "unit": "s",
+      "title": "Required verify duration — p95 (latest snapshot)",
+      "description": "Same snapshot as p50. Shown for shape, not as a cohort p95 guarantee. Bucket bounds are explicit, so the estimate is limited by bucket width.",
+      "query": "histogram_quantile(0.95, sum by (le) (onmaru_ci_job_duration_seconds_bucket{workflow=\"ci\",lane=\"required-verdict\"}))"
+    },
+    {
+      "key": "cache_hit_ratio", "panel_id": 4, "language": "promql", "unit": "percentunit",
+      "title": "Build cache layer hit ratio — snapshot by lane",
+      "description": "Layers in state warm divided by layers in warm or cold. Partial, invalidated and disabled layers are excluded from the denominator. Empty means no telemetry, not a zero hit ratio.",
+      "query": "sum by (lane) (onmaru_ci_build_cache_operations_total{workflow=\"ci\",cache_result=\"hit\"}) / sum by (lane) (onmaru_ci_build_cache_operations_total{workflow=\"ci\",cache_result=~\"hit|miss\"})"
+    },
+    {
+      "key": "cache_transfer_bytes", "panel_id": 5, "language": "promql", "unit": "bytes",
+      "title": "Build cache transfer bytes — not yet emitted",
+      "description": "Restore/upload bytes are not in ci-performance-evidence/1.0. This panel stays empty until a byte source exists; it never reads zero.",
+      "query": "sum by (lane) (onmaru_ci_build_cache_bytes{workflow=\"ci\"})"
+    },
+    {
+      "key": "tests_selected", "panel_id": 6, "language": "promql", "unit": "short",
+      "title": "Tests selected by planner — latest snapshot",
+      "description": "Planner-selected test count per lane and test scope (affected or full). Compare affected against full on the same lane; not a cumulative total across runs.",
+      "query": "sum by (lane, test_type) (onmaru_ci_tests_selected_total{workflow=\"ci\"})"
+    },
+    {
+      "key": "tests_executed", "panel_id": 7, "language": "promql", "unit": "short",
+      "title": "Tests executed now — latest snapshot",
+      "description": "Tests actually run in this execution (verified-from-cache tests are not included). The gap to selected is cache-verified work, not a failure.",
+      "query": "sum by (lane, test_type) (onmaru_ci_tests_executed_total{workflow=\"ci\"})"
+    },
+    {
+      "key": "spring_context_loads", "panel_id": 8, "language": "promql", "unit": "short",
+      "title": "Spring Context creations — not yet emitted",
+      "description": "Context creation counts are not in ci-performance-evidence/1.0; context timing is shown as a span only. Empty means no telemetry, never zero context loads.",
+      "query": "sum by (lane) (onmaru_ci_spring_context_loads_total{workflow=\"ci\"})"
+    },
+    {
+      "key": "testcontainers_startup_mean", "panel_id": 9, "language": "promql", "unit": "s",
+      "title": "Testcontainers startup — mean by lane",
+      "description": "Mean of the container-preparation histogram for the retained snapshot. The lane is the consumer-declared producer lane, not a per-container label.",
+      "query": "sum by (lane) (onmaru_ci_testcontainers_startup_seconds_sum{workflow=\"ci\"}) / sum by (lane) (onmaru_ci_testcontainers_startup_seconds_count{workflow=\"ci\"})"
+    },
+    {
+      "key": "gradle_task_mean", "panel_id": 10, "language": "promql", "unit": "s",
+      "title": "Gradle task time — mean by lane",
+      "description": "Mean of the Gradle task-category histogram. Nested Context, container and Flyway time is inside the test span and is not added to this value.",
+      "query": "sum by (lane) (onmaru_ci_gradle_task_duration_seconds_sum{workflow=\"ci\"}) / sum by (lane) (onmaru_ci_gradle_task_duration_seconds_count{workflow=\"ci\"})"
+    },
+    {
+      "key": "affected_fallback", "panel_id": 11, "language": "promql", "unit": "short",
+      "title": "Affected fallback to full verification — not yet emitted",
+      "description": "Fallback count and type need a planner source that is not in ci-performance-evidence/1.0. Empty means unknown, not zero fallbacks.",
+      "query": "sum by (test_type) (onmaru_ci_affected_fallback_total{workflow=\"ci\"})"
+    },
+    {
+      "key": "selection_mismatch", "panel_id": 12, "language": "promql", "unit": "short",
+      "title": "Selection mismatch — not yet emitted",
+      "description": "Affected success followed by full failure needs the paired-run comparator. Empty means unknown, never zero mismatches.",
+      "query": "sum(onmaru_ci_selection_mismatch_total{workflow=\"ci\"})"
+    },
+    {
+      "key": "result_mix", "panel_id": 13, "language": "promql", "unit": "short",
+      "title": "Workflow results — retained snapshot counts",
+      "description": "Observation counts per result label (success, failure, cancellation, timeout, unknown). Snapshot counts only; not a failure rate, flaky rate or lifetime counter.",
+      "query": "sum by (result) (onmaru_ci_workflow_duration_seconds_count{workflow=\"ci\"})"
+    },
+    {
+      "key": "collector_health", "panel_id": 14, "language": "promql", "source": "collector-internal", "unit": "short",
+      "title": "Collector self-scrape health — 1 up / 0 down",
+      "description": "Scrape health for the Collector used by this dashboard. Zero means the exporter-side panels cannot observe delivery; it is not a CI conclusion.",
+      "query": "up{job=\"collector-internal\",instance=\"collector:8888\"}"
+    },
+    {
+      "key": "flyway_spans", "panel_id": 15, "language": "traceql", "unit": "none",
+      "title": "Flyway spans inside the tests span",
+      "description": "Each row is a Flyway span nested in its run's tests span. Placement is unverified (start at tests start, clipped to tests duration). Open the trace for the waterfall.",
+      "query": "{ resource.service.name = \"onmaru-ci\" && span.toolkit.ci.nested_in = \"tests\" && name = \"flyway\" && span.cicd.pipeline.name = \"ci\" && span.vcs.repository.name = \"YRootLab/OnMaru-backend\" && span.cicd.pipeline.run.id =~ \"[1-9][0-9]{0,18}\" } | select(span.cicd.pipeline.run.id, span.toolkit.ci.run.attempt, span.toolkit.ci.manifest.digest)"
+    },
+    {
+      "key": "context_container_spans", "panel_id": 16, "language": "traceql", "unit": "none",
+      "title": "Context and container spans inside the tests span",
+      "description": "Spring Context and Testcontainers preparation nested in the tests span. Their durations are inside test time and must not be summed with it.",
+      "query": "{ resource.service.name = \"onmaru-ci\" && span.toolkit.ci.nested_in = \"tests\" && name =~ \"context_init|container_prepare\" && span.cicd.pipeline.name = \"ci\" && span.vcs.repository.name = \"YRootLab/OnMaru-backend\" && span.cicd.pipeline.run.id =~ \"[1-9][0-9]{0,18}\" } | select(span.cicd.pipeline.run.id, span.toolkit.ci.run.attempt, span.toolkit.ci.manifest.digest)"
+    },
+    {
+      "key": "layer_runs", "panel_id": 17, "language": "traceql", "unit": "none",
+      "title": "Layer run traces — up to 20 matches",
+      "description": "One trace per run with the observed job window and its nested waterfall. Open the Tempo trace for the waterfall, or use the run's Actions and manifest links. The source verdict is the result column.",
+      "query": "{ resource.service.name = \"onmaru-ci\" && span.toolkit.ci.scope = \"layer-run\" && span.cicd.pipeline.name = \"ci\" && span.vcs.repository.name = \"YRootLab/OnMaru-backend\" && span.cicd.pipeline.run.id =~ \"[1-9][0-9]{0,18}\" } | select(span.cicd.pipeline.run.id, span.toolkit.ci.run.attempt, span.toolkit.ci.manifest.digest, span.cicd.pipeline.result)"
+    }
+  ]
+}

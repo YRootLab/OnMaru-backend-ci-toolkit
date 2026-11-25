@@ -3,7 +3,7 @@ from pipeline_toolkit.runners import Command, CommandRunner, RetryPolicy
 
 def test_timeout_terminates_process_group_and_preserves_partial_streams():
     code = "import time; print('before', flush=True); time.sleep(10)"
-    result = CommandRunner({sys.executable}).run(Command(sys.executable, ("-c", code)), timeout=0.05)
+    result = CommandRunner({sys.executable}).run(Command(sys.executable, ("-c", code)), timeout=0.3)
     assert result.reason == "timeout"
     assert "before" in result.stdout
 

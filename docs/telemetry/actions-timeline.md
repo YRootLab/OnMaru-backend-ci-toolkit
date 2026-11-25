@@ -1,5 +1,7 @@
 # CI Actions timeline evidence v1
 
+> Architecture: [evidence generation and normalization](../architecture/evidence.md), [outcome states](../architecture/outcomes.md). Legacy names: [terminology migration](../architecture/migration.md).
+
 Related: [Toolkit #118](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/118), [Root #115](https://github.com/YRootLab/OnMaru-backend-ci-toolkit/issues/115), [ADR-0005](../decisions/0005-consumer-owned-ci-observability.md).
 
 Optional post-run transformation and delivery are documented in [Actions-to-OTLP v1](otlp-export.md). This evidence contract remains independent of exporter availability.
