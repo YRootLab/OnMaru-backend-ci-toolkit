@@ -253,7 +253,11 @@ def http_transport(url, body, headers, timeout):
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise TimeoutError("response deadline exceeded")
-                socket.settimeout(remaining)
+                try:
+                    if socket is not None and socket.fileno() != -1:
+                        socket.settimeout(remaining)
+                except OSError:
+                    pass
                 part = response.read1(min(4096, MAX_RESPONSE_BYTES + 1 - len(raw)))
                 if not part:
                     return HttpResponse(response.status, bytes(raw), dict(response.headers))
